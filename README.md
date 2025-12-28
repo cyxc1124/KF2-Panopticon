@@ -90,6 +90,3 @@ python webapp.py
 
 This software is provided "as is" without warranty of any kind.
 
-### **Next Step**
-
-Would you like me to create a scheduled task script (PowerShell or Batch) to automate the execution of `Query.py`?
