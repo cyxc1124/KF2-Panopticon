@@ -1,0 +1,63 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist/
+build/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database (开发数据库不打包进镜像)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+*.jsonl
+
+# 环境变量和敏感信息
+.env
+.env.*
+.steam_key
+
+# 文档
+*.md
+!README.md
+!README_CN.md
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~
+
