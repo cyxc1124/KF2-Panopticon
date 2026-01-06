@@ -2,6 +2,7 @@
 数据库抽象层 - 支持 SQLite 和 PostgreSQL
 """
 import os
+import threading
 from contextlib import contextmanager
 
 try:
@@ -122,27 +123,29 @@ class DatabaseAdapter:
 
 
 class Database:
-    """统一的数据库接口"""
+    """统一的数据库接口（线程安全）"""
     
     def __init__(self, config=None):
         self.config = config or DatabaseConfig()
         self.adapter = DatabaseAdapter(self.config.db_type)
-        self._connection = None
+        # 使用 threading.local() 存储每个线程的连接
+        self._local = threading.local()
     
     def connect(self):
-        """建立数据库连接"""
-        if self._connection is None:
+        """建立数据库连接（线程安全）"""
+        # 每个线程都有自己的连接
+        if not hasattr(self._local, 'connection') or self._local.connection is None:
             conn_string = self.config.get_connection_string()
-            self._connection = self.adapter.connect(conn_string)
-            self.adapter.enable_foreign_keys(self._connection)
-            self.adapter.optimize_connection(self._connection)
-        return self._connection
+            self._local.connection = self.adapter.connect(conn_string)
+            self.adapter.enable_foreign_keys(self._local.connection)
+            self.adapter.optimize_connection(self._local.connection)
+        return self._local.connection
     
     def close(self):
-        """关闭数据库连接"""
-        if self._connection:
-            self._connection.close()
-            self._connection = None
+        """关闭当前线程的数据库连接"""
+        if hasattr(self._local, 'connection') and self._local.connection:
+            self._local.connection.close()
+            self._local.connection = None
     
     def cursor(self):
         """获取游标"""
@@ -173,13 +176,13 @@ class Database:
     
     def commit(self):
         """提交事务"""
-        if self._connection:
-            self._connection.commit()
+        if hasattr(self._local, 'connection') and self._local.connection:
+            self._local.connection.commit()
     
     def rollback(self):
         """回滚事务"""
-        if self._connection:
-            self._connection.rollback()
+        if hasattr(self._local, 'connection') and self._local.connection:
+            self._local.connection.rollback()
     
     @contextmanager
     def transaction(self):
