@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3"><div class="card p-3 text-center bg-dark border-secondary"><h5 class="text-danger">{{ stats.players }}</h5><small class="text-muted">Active Players</small></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center bg-dark border-secondary"><h5>{{ stats.active_servers }}</h5><small class="text-muted">Active Servers</small></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center bg-dark border-secondary"><h5>{{ stats.total_servers }}</h5><small class="text-muted">Total Monitored</small></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center bg-dark border-secondary"><h5>{{ stats.occupancy }}%</h5><small class="text-muted">Occupancy</small></div></div>
+</div>
+
+<div class="card p-4 border-0 bg-dark text-white">
+    <h4 class="mb-3">📡 Live Player Feed</h4>
+    <div class="table-responsive">
+        <table class="table table-dark table-striped table-hover" id="playersTable">
+            <thead>
+                <tr>
+                    <th>Player Name</th>
+                    <th>Server</th>
+                    <th>Score</th>
+                    <th>Duration</th>
+                    <th>Map</th>
+                    <th>Last Seen</th> 
+                </tr>
+                <tr class="filters">
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Player" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Server" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Score" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Time" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Map" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Seen" onclick="event.stopPropagation()"></th> 
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in players %}
+                <tr>
+                    <td>
+                        <a href="/player/{{ p.player_id }}" class="fw-bold text-warning text-decoration-none">{{ p.player_name }}</a>
+                    </td>
+                    
+                    <td title="{{ p.city|default('Unknown') }}">
+                        {% if p.flag != 'unknown' %}
+                            <img src="https://flagcdn.com/20x15/{{ p.flag }}.png" style="margin-right:5px; vertical-align: middle;">
+                        {% endif %}
+                        <a href="/server/{{ p.server_id }}" class="text-white text-decoration-none">{{ p.server_name }}</a>
+                    </td>
+                    
+                    <td>{{ p.score }}</td>
+                    <td data-order="{{ p.duration }}" class="text-end font-monospace">
+                        {{ p.duration | human_time }}
+                    </td>
+                    <td><span class="badge bg-secondary">{{ p.map }}</span></td>
+                    
+
+					<td class="small text-muted">
+						<span class="local-time" data-time="{{ p.last_seen }}">
+							{{ p.last_seen[:19] }}
+						</span>
+					</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    var table = $('#playersTable').DataTable({
+        orderCellsTop: true,
+        pageLength: 25,
+        order: [[ 2, "desc" ]], 
+        dom: 'ltipr'
+    });
+
+    $('.filters input').on('keyup change', function() {
+        var colIndex = $(this).parent().index();
+        if (table.column(colIndex).search() !== this.value) {
+            table.column(colIndex).search(this.value).draw();
+        }
+    });
+});
+</script>
+{% endblock %}

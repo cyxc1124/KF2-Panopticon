@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3"><div class="card p-3 text-center bg-dark border-secondary"><h5 class="text-danger">{{ stats.players }}</h5><small class="text-muted">Active Players</small></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center bg-dark border-secondary"><h5>{{ stats.active_servers }}</h5><small class="text-muted">Active Servers</small></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center bg-dark border-secondary"><h5>{{ stats.total_servers }}</h5><small class="text-muted">Total Monitored</small></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center bg-dark border-secondary"><h5>{{ stats.occupancy }}%</h5><small class="text-muted">Occupancy</small></div></div>
+</div>
+{% if current_faction %}
+<div class="alert alert-info d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <strong><i class="bi bi-filter-circle-fill"></i> Filter Active:</strong> 
+        Showing assets controlled by <span class="fw-bold">{{ current_faction }}</span>
+    </div>
+    <a href="/" class="btn btn-sm btn-outline-dark">Clear Filter</a>
+</div>
+{% endif %}
+<div class="card p-4 border-0 bg-dark text-white">
+    <h4 class="mb-3">🌍 Global Server Grid</h4>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover table-striped" id="serverTable">
+            <thead>
+                <tr>
+                    <th>Server Name</th>
+                    <th>Player Count</th>
+                    <th>Map</th>
+                    <th>Address</th>
+                    <th>Last Seen</th>
+                    <th style="width: 50px;">Ctry</th> 
+                    <th>City</th>                      
+                </tr>
+                <tr class="filters">
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Name" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Player Count" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Map" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="IP" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="Time" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="FR" onclick="event.stopPropagation()"></th>
+                    <th><input type="text" class="form-control form-control-sm" placeholder="City" onclick="event.stopPropagation()"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in servers %}
+                <tr>
+                    <td>
+                        <a href="/server/{{ s.id }}" class="text-white text-decoration-none fw-bold">{{ s.name }}</a>
+                    </td>
+                    
+                    <td>
+                        <a href="/server/{{ s.id }}" class="text-decoration-none">
+                            <span class="badge {% if s.player_count > 0 %}bg-danger{% else %}bg-secondary{% endif %}">{{ s.player_count }}</span>
+                        </a>
+                    </td>
+                    
+                    <td>{{ s.map }}</td>
+                    
+                    <td class="font-monospace small text-muted">
+                        {% if s.is_fallback %}
+                            <span class="text-warning fw-bold" title="No Game Port. Using Query Port.">{{ s.display_addr }}</span>
+                        {% else %}
+                            {{ s.display_addr }}
+                        {% endif %}
+                    </td>
+                    
+                   <td class="small text-muted">
+                       <span class="local-time" data-time="{{ s.last_seen }}" style="visibility: hidden;">{{ s.last_seen[:19] }}</span>
+                   </td>
+
+                    <td class="text-center">
+                        {% if s.flag != 'unknown' %}
+                        <img src="https://flagcdn.com/20x15/{{ s.flag }}.png">
+                        <span class="d-block small text-uppercase text-muted" style="font-size: 0.7rem;">{{ s.flag }}</span>
+                        {% endif %}
+                    </td>
+                    
+                    <td>{{ s.city }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    var table = $('#serverTable').DataTable({
+        orderCellsTop: true,
+        pageLength: 50,
+        order: [[ 1, "desc" ]], 
+        dom: 'ltipr'
+    });
+
+    $('.filters input').on('keyup change', function() {
+        var colIndex = $(this).parent().index();
+        if (table.column(colIndex).search() !== this.value) {
+            table.column(colIndex).search(this.value).draw();
+        }
+    });
+});
+</script>
+{% endblock %}
