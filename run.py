@@ -19,6 +19,7 @@ app.teardown_appcontext(close_db_connection)
 
 if __name__ == '__main__':
     import config
+    from app.models.init_db import init_database, check_database_status
     
     # 从配置获取端口和调试模式
     port = config.WEB_PORT
@@ -39,6 +40,14 @@ if __name__ == '__main__':
   - 就绪检查: http://localhost:{port}/ready
   
 """)
+    
+    # 自动初始化数据库（幂等操作）
+    print("检查数据库状态...\n")
+    
+    # 自动初始化（PostgreSQL 和 SQLite 都支持）
+    init_database()
+    
+    print("-" * 63)
     
     app.run(debug=debug, port=port, host='0.0.0.0')
 
