@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Web 应用
+  webapp:
+    build: .
+    ports:
+      - "${WEB_PORT:-9001}:9001"
+    environment:
+      - STEAM_KEY=${STEAM_KEY}
+      - DB_TYPE=${DB_TYPE:-sqlite}
+      - DB_FILE=/app/data/kf2_panopticon.db
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
+      - DEBUG_MODE=${DEBUG_MODE:-false}
+      - WEB_PORT=9001
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 数据收集器
+  collector:
+    build: .
+    command: python Query.py
+    environment:
+      - STEAM_KEY=${STEAM_KEY}
+      - DB_TYPE=${DB_TYPE:-sqlite}
+      - DB_FILE=/app/data/kf2_panopticon.db
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      - webapp
+
+  # PostgreSQL (可选，如果使用 PostgreSQL)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-kf2_panopticon}
+      - POSTGRES_USER=${POSTGRES_USER:-kf2user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    restart: unless-stopped
+    profiles:
+      - postgres
+
+volumes:
+  postgres_data:
