@@ -8,6 +8,17 @@ from pathlib import Path
 # 基础路径
 BASE_DIR = Path(__file__).resolve().parent
 
+# 加载 .env 文件（开发环境使用）
+try:
+    from dotenv import load_dotenv
+    env_file = BASE_DIR / '.env'
+    if env_file.exists():
+        load_dotenv(env_file)
+        print(f"✅ 已加载环境变量配置文件: {env_file}")
+except ImportError:
+    # python-dotenv 未安装，使用系统环境变量
+    pass
+
 # ==================== Steam API 配置 ====================
 # 在此处设置你的 Steam Web API Key，或通过环境变量 STEAM_KEY 设置
 # 获取地址: https://steamcommunity.com/dev/apikey
