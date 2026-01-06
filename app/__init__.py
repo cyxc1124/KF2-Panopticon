@@ -33,12 +33,14 @@ def create_app(config_name=None):
     
     # 注册蓝图
     from app.routes import main_bp, servers_bp, players_bp, factions_bp, stats_bp
+    from app.routes.health import health_bp
     
     app.register_blueprint(main_bp)
     app.register_blueprint(servers_bp)
     app.register_blueprint(players_bp)
     app.register_blueprint(factions_bp)
     app.register_blueprint(stats_bp)
+    app.register_blueprint(health_bp)
     
     # 性能监控
     register_performance_monitoring(app)
