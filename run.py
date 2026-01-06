@@ -18,9 +18,12 @@ app = create_app()
 app.teardown_appcontext(close_db_connection)
 
 if __name__ == '__main__':
-    # 从配置或环境变量获取端口
-    port = app.config.get('WEB_PORT', int(os.environ.get('WEB_PORT', 9001)))
-    debug = app.config.get('DEBUG_MODE', os.environ.get('FLASK_DEBUG', 'False').lower() == 'true')
+    import config
+    
+    # 从配置获取端口和调试模式
+    port = config.WEB_PORT
+    debug = config.DEBUG_MODE
+    db_type = config.DB_TYPE
     
     print(f"""
 ╔═══════════════════════════════════════════════════════════╗
@@ -30,7 +33,10 @@ if __name__ == '__main__':
 启动信息:
   - 端口: {port}
   - 调试模式: {debug}
+  - 数据库类型: {db_type}
   - 访问地址: http://localhost:{port}
+  - 健康检查: http://localhost:{port}/health
+  - 就绪检查: http://localhost:{port}/ready
   
 """)
     
