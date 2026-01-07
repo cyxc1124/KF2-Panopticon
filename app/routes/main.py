@@ -11,7 +11,9 @@ def index():
     """首页 - 服务器列表"""
     db = get_db_connection()
     cur = db.get_cursor()
-    stats = get_global_stats(cur)
+    
+    with StepTimer("Global Stats Query"):
+        stats = get_global_stats(cur)
     
     # 获取派系过滤参数
     target_faction = request.args.get('faction')

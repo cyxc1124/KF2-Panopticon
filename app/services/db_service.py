@@ -21,28 +21,26 @@ def close_db_connection(exception):
 def get_global_stats(cur):
     """获取全局统计数据"""
     try:
-        cur.execute("SELECT COUNT(*) as count FROM fact_active")
-        players_row = cur.fetchone()
-        players = players_row['count'] if players_row else 0
-        
-        cur.execute("SELECT COUNT(*) as count FROM dim_servers WHERE player_count > 0")
-        active_servers_row = cur.fetchone()
-        active_servers = active_servers_row['count'] if active_servers_row else 0
-        
-        cur.execute("SELECT COUNT(*) as count FROM dim_servers")
-        total_servers_row = cur.fetchone()
-        total_servers = total_servers_row['count'] if total_servers_row else 0
+        # 优化：合并为一个查询，减少数据库往返次数
+        cur.execute("""
+            SELECT 
+                (SELECT COUNT(*) FROM fact_active) as active_players,
+                (SELECT COUNT(*) FROM dim_servers WHERE player_count > 0) as active_servers,
+                (SELECT COUNT(*) FROM dim_servers) as total_servers
+        """)
+        row = cur.fetchone()
         
         stats = {
-            'players': players,
-            'active_servers': active_servers,
-            'total_servers': total_servers
+            'players': row['active_players'] if row else 0,
+            'active_servers': row['active_servers'] if row else 0,
+            'total_servers': row['total_servers'] if row else 0
         }
         
         if stats['total_servers'] > 0:
             stats['occupancy'] = round((stats['active_servers'] / stats['total_servers']) * 100, 1)
         else:
             stats['occupancy'] = 0
+        
         return stats
     except Exception:
         return {'players': 0, 'active_servers': 0, 'total_servers': 0, 'occupancy': 0}

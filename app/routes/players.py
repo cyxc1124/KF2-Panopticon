@@ -12,7 +12,9 @@ def players():
     """玩家列表页"""
     db = get_db_connection()
     cur = db.get_cursor()
-    stats = get_global_stats(cur)
+    
+    with StepTimer("Global Stats Query"):
+        stats = get_global_stats(cur)
     
     with StepTimer("Players List Query"):
         cur.execute("""
