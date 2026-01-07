@@ -4,10 +4,16 @@ from app.models.database import (
     DatabaseConfig,
     get_database
 )
+from app.models.migrations import (
+    Migration,
+    MigrationManager
+)
 
 __all__ = [
     'Database',
     'DatabaseConfig',
-    'get_database'
+    'get_database',
+    'Migration',
+    'MigrationManager'
 ]
 

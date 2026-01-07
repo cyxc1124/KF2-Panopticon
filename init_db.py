@@ -3,68 +3,90 @@
 Database Initialization CLI Tool
 
 Usage:
-  python init_db.py              # Initialize database (if not initialized)
-  python init_db.py --force      # Force re-initialization
-  python init_db.py --status     # Check database status only
+  python init_db.py                  # Run pending migrations
+  python init_db.py --status         # Show migration status
+  python init_db.py --force          # Force re-run all migrations (legacy mode)
+  python init_db.py --migrate-status # Alias for --status
 """
 import sys
 from app.models.init_db import init_database, check_database_status
+from app.models.migrations import MigrationManager
+from app.models.database import get_database
 
 
 def main():
     args = sys.argv[1:]
     
-    # Check status
-    if '--status' in args:
-        print("=" * 80)
-        print("Database Status Check")
-        print("=" * 80)
-        
-        status = check_database_status()
-        
-        print(f"\nDatabase Type: {status['type']}")
-        print(f"Initialized: {'Yes' if status['initialized'] else 'No'}")
-        
-        if status['error']:
-            print(f"Error: {status['error']}")
-        else:
-            print(f"Table Count: {len(status['tables'])}")
-            if status['tables']:
-                print(f"\nTable List:")
-                for table in status['tables']:
-                    print(f"  - {table}")
-        
+    # Migration status
+    if '--status' in args or '--migrate-status' in args:
+        try:
+            db = get_database()
+            manager = MigrationManager(db)
+            manager.status()
+        except Exception as e:
+            print(f"[ERROR] Failed to get migration status: {e}")
+            sys.exit(1)
         return
     
-    # Initialize database
-    force = '--force' in args
-    
-    if force:
-        print("[WARN] Force re-initialization mode\n")
-    
-    success = init_database(force=force)
-    
-    if success:
-        print("\n" + "=" * 80)
-        print("[OK] Database initialization successful!")
-        print("=" * 80)
+    # Force mode (legacy: re-initialize using old method)
+    if '--force' in args:
+        print("[WARN] Force re-initialization mode (legacy)\n")
+        success = init_database(force=True)
         
-        # Show final status
-        status = check_database_status()
-        print(f"\nDatabase Info:")
-        print(f"  Type: {status['type']}")
-        print(f"  Table Count: {len(status['tables'])}")
+        if success:
+            print("\n" + "=" * 80)
+            print("[OK] Database initialization successful!")
+            print("=" * 80)
+            sys.exit(0)
+        else:
+            print("\n" + "=" * 80)
+            print("[ERROR] Database initialization failed")
+            print("=" * 80)
+            sys.exit(1)
+        return
+    
+    # Default: Run migrations
+    print("=" * 80)
+    print("Database Migration Tool")
+    print("=" * 80)
+    
+    try:
+        db = get_database()
+        manager = MigrationManager(db)
         
-        sys.exit(0)
-    else:
-        print("\n" + "=" * 80)
-        print("[ERROR] Database initialization failed")
-        print("=" * 80)
+        # 显示当前状态
+        print("\n[INFO] Checking migration status...")
+        pending = manager.get_pending_migrations()
+        
+        if not pending:
+            print("[OK] Database is up to date, no migrations needed")
+            manager.status()
+            sys.exit(0)
+        
+        # 执行迁移
+        success_count, fail_count = manager.migrate()
+        
+        if fail_count > 0:
+            print(f"\n[ERROR] {fail_count} migration(s) failed")
+            sys.exit(1)
+        
+        if success_count > 0:
+            print(f"\n[OK] Successfully applied {success_count} migration(s)")
+            manager.status()
+            sys.exit(0)
+    
+    except FileNotFoundError as e:
+        print(f"[ERROR] {e}")
+        print("\nPlease ensure 'migrations' directory exists with migration files")
+        sys.exit(1)
+    
+    except Exception as e:
+        print(f"[ERROR] Migration failed: {e}")
         print("\nPlease check:")
         print("  1. Database connection config is correct (config.py or env vars)")
         print("  2. PostgreSQL service is running")
         print("  3. Database user has sufficient privileges")
-        
+        print("  4. Migration files are valid SQL")
         sys.exit(1)
 
 
