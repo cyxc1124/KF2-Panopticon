@@ -51,6 +51,12 @@ def main():
     print("=" * 80)
     
     try:
+        # 确保数据库存在（自动创建）
+        from app.models.init_db import _ensure_postgresql_database_exists
+        if not _ensure_postgresql_database_exists():
+            print("[ERROR] Failed to ensure database exists")
+            sys.exit(1)
+        
         db = get_database()
         manager = MigrationManager(db)
         
