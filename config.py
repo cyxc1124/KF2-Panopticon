@@ -14,7 +14,7 @@ try:
     env_file = BASE_DIR / '.env'
     if env_file.exists():
         load_dotenv(env_file)
-        print(f"✅ 已加载环境变量配置文件: {env_file}")
+        print(f"[OK] Loaded .env file: {env_file}")
 except ImportError:
     # python-dotenv 未安装，使用系统环境变量
     pass
