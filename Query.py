@@ -183,21 +183,24 @@ def clean_server_name(raw_name, ip_address):
 
     return name.title()
 
-def resolve_geo_db(cur, ip_str):
+def resolve_geo_db(cur, ip_str, has_geoip=False):
     """Resolves IP to City, Code using DB ip_ranges."""
+    if not has_geoip:
+        return "Unknown"
+    
     try:
         ip_int = int(ipaddress.IPv4Address(ip_str))
-        result = cur.execute("""
+        cur.execute("""
             SELECT city_name, country_code
             FROM ip_ranges 
             WHERE ip_to >= %s 
             ORDER BY ip_to ASC 
             LIMIT 1
         """, (ip_int,))
-        row = result.fetchone()
+        row = cur.fetchone()
         if row:
-            city_name = row.get('city_name') or row[0] if isinstance(row, dict) else row[0]
-            country_code = row.get('country_code') or row[1] if isinstance(row, dict) else row[1]
+            city_name = row.get('city_name') if isinstance(row, dict) else row[0]
+            country_code = row.get('country_code') if isinstance(row, dict) else row[1]
             if city_name and country_code:
                 return f"{city_name}, {country_code}"
             elif country_code:
@@ -214,11 +217,20 @@ def read_string(data, pos):
         return data[pos:end].decode('utf-8', errors='ignore'), end + 1
     except: return "Unknown", pos + 1
 
-def parse_iso_time(time_str):
+def parse_iso_time(time_val):
+    """Parse time value - handles both datetime objects (PostgreSQL) and ISO strings (SQLite legacy)"""
     try:
-        if not time_str: return datetime.utcnow() # <--- CHANGED: .now() to .utcnow()
-        return datetime.fromisoformat(time_str)
-    except ValueError: return datetime.utcnow()   # <--- CHANGED: .now() to .utcnow()
+        if not time_val: 
+            return datetime.utcnow()
+        # PostgreSQL returns datetime objects directly
+        if isinstance(time_val, datetime):
+            return time_val
+        # SQLite/string format
+        if isinstance(time_val, str):
+            return datetime.fromisoformat(time_val)
+        return datetime.utcnow()
+    except (ValueError, TypeError): 
+        return datetime.utcnow()
 
 def get_public_ip():
     try:
@@ -550,6 +562,25 @@ def main():
 
     # 使用数据库抽象层
     db = get_database()
+    
+    # Check if ip_ranges table exists for GeoIP functionality
+    has_geoip = False
+    try:
+        with db.cursor() as cur:
+            cur.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'ip_ranges'
+                )
+            """)
+            has_geoip = cur.fetchone()[0]
+        db.commit()
+    except Exception:
+        pass
+    
+    if not has_geoip:
+        print("[WARN] ip_ranges table not found. GeoIP location will be set to 'Unknown'")
+    
     try:
         with db.cursor() as cur:
             cur.execute("SELECT id, name FROM dim_maps")
@@ -618,7 +649,7 @@ def main():
 
                 # --- GET LOCATION FROM DB ---
                 # Use the helper to resolve against ip_ranges
-                location_val = resolve_geo_db(cur, current_ip)
+                location_val = resolve_geo_db(cur, current_ip, has_geoip)
                 
                 # --- ATOMIC UPSERT ---
                 # 1. Ensure server record exists (Using Identity: IP + QueryPort)
