@@ -146,7 +146,7 @@
                         <div>
                             <span class="text-info fw-bold">{{ match.map_name }}</span>
                             <br>
-                            <small class="text-muted local-time" data-time="{{ match.start_time }}" style="visibility: hidden;">
+                            <small class="text-muted local-time" data-time="{{ match.start_time|datetime_str if match.start_time else '' }}" style="visibility: hidden;">
                                 {{ (match.start_time|datetime_str)[:16] if match.start_time else 'N/A' }}
                             </small>
                         </div>

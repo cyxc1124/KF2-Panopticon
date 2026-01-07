@@ -103,7 +103,7 @@
                                 <td class="text-center text-white fw-bold">{{ "{:,}".format(row.unique_players) }}</td>
                                 <td class="text-center text-secondary">{{ row.total_playtime_seconds|human_time }}</td>
                                 <td class="text-end pe-4 small text-muted">
-                                    <span class="local-time" data-time="{{ row.last_contact }}">
+                                    <span class="local-time" data-time="{{ row.last_contact|datetime_str if row.last_contact else '' }}">
                                         {{ (row.last_contact|datetime_str)[:10] if row.last_contact else 'N/A' }}
                                     </span>
                                 </td>
