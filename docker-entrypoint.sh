@@ -13,7 +13,12 @@ echo "=========================================="
 
 case "$MODE" in
   web)
-    echo "Starting Web Application..."
+    echo "Starting Web Application with Gunicorn..."
+    exec gunicorn --config gunicorn.conf.py "run:app"
+    ;;
+  
+  dev)
+    echo "Starting Web Application (Development Mode)..."
     exec python run.py
     ;;
   

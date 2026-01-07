@@ -11,12 +11,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 from app import create_app
 from app.services.db_service import close_db_connection
 
-# 创建应用实例
-app = create_app()
-
-# 注册teardown处理器
-app.teardown_appcontext(close_db_connection)
-
 # 预热数据库连接池（避免第一次请求慢）
 def warmup_connection_pool():
     """在应用启动时预热连接池和健康检查连接"""
@@ -38,6 +32,12 @@ def warmup_connection_pool():
         print(f"[OK] Connection pool and health check connection warmed up in {duration:.2f}ms")
     except Exception as e:
         print(f"[WARN] Failed to warm up connection pool: {e}")
+
+# 创建应用实例
+app = create_app()
+
+# 注册teardown处理器
+app.teardown_appcontext(close_db_connection)
 
 if __name__ == '__main__':
     import config
