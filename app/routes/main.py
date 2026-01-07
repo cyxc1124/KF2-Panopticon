@@ -10,7 +10,7 @@ main_bp = Blueprint('main', __name__)
 def index():
     """首页 - 服务器列表"""
     db = get_db_connection()
-    cur = db.cursor()
+    cur = db.get_cursor()
     stats = get_global_stats(cur)
     
     # 获取派系过滤参数
@@ -66,7 +66,7 @@ def search():
             return render_template('search_results.html', query=q, players=[], servers=[])
 
         db = get_db_connection()
-        cur = db.cursor()
+        cur = db.get_cursor()
         wildcard_q = f"%{q}%"
 
         cur.execute("""

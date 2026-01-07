@@ -11,7 +11,7 @@ PER_PAGE = 50
 def players():
     """玩家列表页"""
     db = get_db_connection()
-    cur = db.cursor()
+    cur = db.get_cursor()
     stats = get_global_stats(cur)
     
     with StepTimer("Players List Query"):
@@ -59,7 +59,7 @@ def players():
 def player_detail(player_id):
     """玩家详情页"""
     db = get_db_connection()
-    cur = db.cursor()
+    cur = db.get_cursor()
     page = request.args.get('page', 1, type=int)
     offset = (page - 1) * PER_PAGE
 

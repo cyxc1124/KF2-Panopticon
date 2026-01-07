@@ -10,7 +10,7 @@ factions_bp = Blueprint('factions', __name__)
 def factions():
     """派系统计页"""
     db = get_db_connection()
-    stats = get_global_stats(db.cursor())
+    stats = get_global_stats(db.get_cursor())
 
     with StepTimer("Check Cache"):
         cached_data = cache.get('factions_page')
@@ -20,7 +20,7 @@ def factions():
         with StepTimer("Cache Hit Processing"):
             pass 
     else:
-        cur = db.cursor()
+        cur = db.get_cursor()
         
         with StepTimer("Query: Live Top 5"):
             cur.execute("""

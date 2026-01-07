@@ -66,6 +66,12 @@ class Database:
         finally:
             cur.close()
     
+    def get_cursor(self):
+        """直接获取游标（不使用上下文管理器）"""
+        conn = self.connect()
+        import psycopg2.extras
+        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
     def commit(self):
         """提交事务"""
         if hasattr(self._local, 'connection') and self._local.connection:

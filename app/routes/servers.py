@@ -9,7 +9,7 @@ servers_bp = Blueprint('servers', __name__)
 def get_match_history(db, server_id, page, per_page):
     """获取服务器比赛历史"""
     with StepTimer("Match History Query"):
-        cur = db.cursor()
+        cur = db.get_cursor()
         offset = (page - 1) * per_page
         
         cur.execute(
@@ -72,7 +72,7 @@ def get_match_history(db, server_id, page, per_page):
 def server_detail(server_id):
     """服务器详情页"""
     db = get_db_connection()
-    cur = db.cursor()
+    cur = db.get_cursor()
     page = request.args.get('page', 1, type=int)
     
     with StepTimer("Server Info Query"):

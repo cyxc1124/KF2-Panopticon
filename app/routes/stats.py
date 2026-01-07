@@ -17,7 +17,7 @@ def statistics():
         with StepTimer("Cache Hit Processing"):
             pass
     else:
-        cur = get_db_connection().cursor()
+        cur = get_db_connection().get_cursor()
         
         with StepTimer("Query: Map Stats"):
             cur.execute("""
