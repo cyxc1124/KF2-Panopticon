@@ -7,8 +7,7 @@ def get_db_connection():
     """获取数据库连接（Flask g对象缓存）"""
     db = getattr(g, '_database', None)
     if db is None:
-        db_instance = get_database()
-        db = g._database = db_instance.connect()
+        db = g._database = get_database()
     return db
 
 
