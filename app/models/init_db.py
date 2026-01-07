@@ -50,10 +50,15 @@ def _ensure_postgresql_database_exists():
         cur.close()
         conn.close()
         
-        # 如果创建了新数据库，需要重置全局连接池
+        # 如果创建了新数据库，等待并重置连接池
+        # 这是为了避免 pgpool 等连接池中间件的缓存问题
         if database_created:
-            print("[INFO] Resetting connection pool after database creation...")
+            import time
+            print("[INFO] Waiting for connection pool middleware (pgpool) to refresh...")
+            time.sleep(5)  # 等待 5 秒让 pgpool 刷新
+            print("[INFO] Resetting connection pool...")
             _reset_connection_pool()
+            print("[OK] Ready to initialize schema")
         
         return True
         
@@ -65,7 +70,7 @@ def _ensure_postgresql_database_exists():
 
 
 def _reset_connection_pool():
-    """重置全局连接池（在创建数据库后调用）"""
+    """重置全局连接池和数据库实例（在创建数据库后调用）"""
     try:
         from app.models import database
         
@@ -74,7 +79,15 @@ def _reset_connection_pool():
             print("[DEBUG] Closing existing connection pool...")
             database._connection_pool.closeall()
             database._connection_pool = None
-            print("[DEBUG] Connection pool reset successfully")
+            print("[DEBUG] Connection pool closed")
+        
+        # 重置全局数据库实例
+        if database._db_instance is not None:
+            print("[DEBUG] Resetting global database instance...")
+            database._db_instance = None
+            print("[DEBUG] Database instance reset")
+        
+        print("[DEBUG] Connection pool and database instance reset completed")
     except Exception as e:
         print(f"[WARN] Failed to reset connection pool: {e}")
 
