@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     import config
     from app.models.database import get_database
-    from app.models.init_db import init_database
 except ImportError as e:
     print(f"Error importing modules: {e}")
     print("Make sure you're running from the project root directory")
@@ -507,13 +506,8 @@ def refresh_recent_rollups(cur, scan_time, days_back=1):
 
 def main():
     start_time = time.time()
-    scan_time = datetime.utcnow() # <--- CHANGED: .now() to .utcnow()
+    scan_time = datetime.utcnow()
     print(f"--- [ SCAN STARTED: {scan_time.strftime('%H:%M:%S')} ] ---")
-    
-    # 确保数据库已初始化（幂等操作）
-    print("[*] 检查数据库状态...")
-    init_database()
-    print("[*] 数据库就绪")
 
     public_ip = get_public_ip()
     if public_ip:

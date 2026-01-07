@@ -19,7 +19,6 @@ app.teardown_appcontext(close_db_connection)
 
 if __name__ == '__main__':
     import config
-    from app.models.init_db import init_database, check_database_status
     
     # 从配置获取端口和调试模式
     port = config.WEB_PORT
@@ -37,16 +36,11 @@ Startup Info:
   - Access URL: http://localhost:{port}
   - Health Check: http://localhost:{port}/health
   - Readiness Check: http://localhost:{port}/ready
+
+Note: Database should be initialized before starting web app.
+      Run 'python init_db.py' if database is not initialized.
   
 """)
-    
-    # 自动初始化数据库（幂等操作）
-    print("Checking database status...\n")
-    
-    # 自动初始化 PostgreSQL
-    init_database()
-    
-    print("-" * 63)
     
     app.run(debug=debug, port=port, host='0.0.0.0')
 
