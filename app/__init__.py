@@ -63,21 +63,20 @@ def register_performance_monitoring(app):
     import logging
     import json
     import time
-    import threading
+    import sys
     from flask import g, request
     
-    # 配置日志
+    # 配置日志输出到控制台（适用于 K8s 环境）
     perf_logger = logging.getLogger('performance')
     perf_logger.setLevel(logging.INFO)
     
-    log_file_path = app.config.get('LOG_FILE', 'logs/performance_debug.jsonl')
-    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
-    
-    file_handler = logging.FileHandler(log_file_path)
-    perf_logger.addHandler(file_handler)
+    # 输出到 stdout，方便 kubectl logs 查看
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter('%(message)s'))
+    perf_logger.addHandler(console_handler)
     
     def write_log_background(log_entry):
-        """后台写入日志"""
+        """输出日志到控制台"""
         perf_logger.info(json.dumps(log_entry))
     
     @app.before_request
@@ -100,5 +99,6 @@ def register_performance_monitoring(app):
                 "breakdown": getattr(g, 'perf_steps', [])
             }
             
-            threading.Thread(target=write_log_background, args=(log_entry,)).start()
+            # 直接输出到控制台，不需要后台线程
+            write_log_background(log_entry)
 
