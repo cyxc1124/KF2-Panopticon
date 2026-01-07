@@ -76,11 +76,21 @@ class Database:
     def connect(self):
         """从连接池获取连接（线程安全）"""
         import time
-        if not hasattr(self._local, 'connection') or self._local.connection is None or self._local.connection.closed:
+        
+        # 检查是否已有连接
+        has_connection = hasattr(self._local, 'connection')
+        is_none = self._local.connection is None if has_connection else True
+        is_closed = self._local.connection.closed if (has_connection and not is_none) else True
+        
+        if not has_connection or is_none or is_closed:
             start = time.time()
+            print(f"[DEBUG] Thread {threading.current_thread().name}: Requesting new connection from pool...")
             self._local.connection = _connection_pool.getconn()
             duration = (time.time() - start) * 1000
-            print(f"[DEBUG] Thread {threading.current_thread().name}: Got connection from pool in {duration:.2f}ms")
+            print(f"[DEBUG] Thread {threading.current_thread().name}: Got connection from pool in {duration:.2f}ms (new={not has_connection}, closed={is_closed})")
+        else:
+            print(f"[DEBUG] Thread {threading.current_thread().name}: Reusing existing connection")
+        
         return self._local.connection
     
     def close(self):

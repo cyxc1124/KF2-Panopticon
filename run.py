@@ -19,17 +19,23 @@ app.teardown_appcontext(close_db_connection)
 
 # 预热数据库连接池（避免第一次请求慢）
 def warmup_connection_pool():
-    """在应用启动时预热连接池"""
+    """在应用启动时预热连接池和健康检查连接"""
     import time
     print("[INFO] Warming up database connection pool...")
     start = time.time()
     try:
         from app.models import get_database
+        from app.routes.health import init_health_check_connection
+        
+        # 1. 初始化连接池
         db = get_database()
-        # 触发连接池初始化
         db.connect()
+        
+        # 2. 初始化健康检查专用连接
+        init_health_check_connection()
+        
         duration = (time.time() - start) * 1000
-        print(f"[OK] Connection pool warmed up in {duration:.2f}ms")
+        print(f"[OK] Connection pool and health check connection warmed up in {duration:.2f}ms")
     except Exception as e:
         print(f"[WARN] Failed to warm up connection pool: {e}")
 
