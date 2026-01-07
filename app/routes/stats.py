@@ -20,29 +20,31 @@ def statistics():
         cur = get_db_connection().cursor()
         
         with StepTimer("Query: Map Stats"):
-            map_stats = cur.execute("""
+            cur.execute("""
                 SELECT
                     m.name AS map,
                     SUM(d.session_count) AS session_count,
                     SUM(d.total_seconds) AS total_seconds
                 FROM fact_map_daily d
                 JOIN dim_maps m ON d.map_id = m.id
-                WHERE d.day >= date('now', '-30 days')
-                GROUP BY d.map_id
+                WHERE d.day >= (CURRENT_DATE - INTERVAL '30 days')::DATE
+                GROUP BY d.map_id, m.name
                 ORDER BY total_seconds DESC
-                LIMIT 10;
-            """).fetchall()
+                LIMIT 10
+            """)
+            map_stats = cur.fetchall()
 
         with StepTimer("Query: Daily Traffic"):
-            daily_traffic = cur.execute("""
+            cur.execute("""
                 SELECT day, unique_players
                 FROM fact_traffic_daily
-                WHERE day >= date('now', '-30 days')
-                ORDER BY day ASC;
-            """).fetchall()
+                WHERE day >= (CURRENT_DATE - INTERVAL '30 days')::DATE
+                ORDER BY day ASC
+            """)
+            daily_traffic = cur.fetchall()
 
         with StepTimer("Query: Top Servers"):
-            server_rows = cur.execute("""
+            cur.execute("""
                 SELECT
                     s.id,
                     s.name,
@@ -53,11 +55,12 @@ def statistics():
                     SUM(d.total_seconds) AS total_seconds
                 FROM fact_server_daily d
                 JOIN dim_servers s ON d.server_id = s.id
-                WHERE d.day >= date('now', '-30 days')
-                GROUP BY d.server_id
+                WHERE d.day >= (CURRENT_DATE - INTERVAL '30 days')::DATE
+                GROUP BY d.server_id, s.id, s.name, s.ip_address, s.game_port, s.query_port
                 ORDER BY total_seconds DESC
-                LIMIT 10;
-            """).fetchall()
+                LIMIT 10
+            """)
+            server_rows = cur.fetchall()
 
             server_stats = []
             for row in server_rows:
@@ -69,7 +72,7 @@ def statistics():
                 server_stats.append(d)
 
         with StepTimer("Query: Top Players"):
-            player_rows = cur.execute("""
+            cur.execute("""
                 SELECT
                     p.id,
                     p.name,
@@ -77,42 +80,46 @@ def statistics():
                     SUM(d.total_seconds) AS total_seconds
                 FROM fact_player_daily d
                 JOIN dim_players p ON d.player_id = p.id
-                WHERE d.day >= date('now', '-30 days')
-                GROUP BY d.player_id
+                WHERE d.day >= (CURRENT_DATE - INTERVAL '30 days')::DATE
+                GROUP BY d.player_id, p.id, p.name
                 ORDER BY total_seconds DESC
-                LIMIT 10;
-            """).fetchall()
+                LIMIT 10
+            """)
+            player_rows = cur.fetchall()
 
         with StepTimer("Query: Chart 24h"):
-            chart_24h = cur.execute("""
+            cur.execute("""
                 SELECT scan_time, active_players, active_servers
                 FROM fact_global_stats
-                WHERE scan_time > datetime('now', '-24 hours')
+                WHERE scan_time > NOW() - INTERVAL '24 hours'
                 ORDER BY scan_time ASC
-            """).fetchall()
+            """)
+            chart_24h = cur.fetchall()
 
         with StepTimer("Query: Chart 30d"):
-            chart_30d = cur.execute("""
+            cur.execute("""
                 SELECT 
-                    datetime((strftime('%s', scan_time) / 14400) * 14400, 'unixepoch') as time_bucket,
+                    TO_TIMESTAMP(FLOOR(EXTRACT(EPOCH FROM scan_time) / 14400) * 14400) as time_bucket,
                     ROUND(AVG(active_players), 1) as avg_players,
                     ROUND(AVG(active_servers), 1) as avg_servers
                 FROM fact_global_stats
-                WHERE scan_time > datetime('now', '-30 days')
+                WHERE scan_time > NOW() - INTERVAL '30 days'
                 GROUP BY time_bucket
                 ORDER BY time_bucket ASC
-            """).fetchall()
+            """)
+            chart_30d = cur.fetchall()
 
         with StepTimer("Query: Chart History"):
-            chart_history = cur.execute("""
+            cur.execute("""
                 SELECT 
-                    date(scan_time) as day,
+                    scan_time::DATE as day,
                     ROUND(AVG(active_players), 1) as avg_players,
                     MAX(active_players) as max_players
                 FROM fact_global_stats
                 GROUP BY day
                 ORDER BY day ASC
-            """).fetchall()
+            """)
+            chart_history = cur.fetchall()
         
         with StepTimer("Data Formatting"):
             map_stats = [dict(r) for r in map_stats]

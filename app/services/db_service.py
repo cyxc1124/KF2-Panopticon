@@ -22,11 +22,24 @@ def close_db_connection(exception):
 def get_global_stats(cur):
     """获取全局统计数据"""
     try:
+        cur.execute("SELECT COUNT(*) as count FROM fact_active")
+        players_row = cur.fetchone()
+        players = players_row['count'] if players_row else 0
+        
+        cur.execute("SELECT COUNT(*) as count FROM dim_servers WHERE player_count > 0")
+        active_servers_row = cur.fetchone()
+        active_servers = active_servers_row['count'] if active_servers_row else 0
+        
+        cur.execute("SELECT COUNT(*) as count FROM dim_servers")
+        total_servers_row = cur.fetchone()
+        total_servers = total_servers_row['count'] if total_servers_row else 0
+        
         stats = {
-            'players': cur.execute("SELECT COUNT(*) FROM fact_active").fetchone()[0],
-            'active_servers': cur.execute("SELECT COUNT(*) FROM dim_servers WHERE player_count > 0").fetchone()[0],
-            'total_servers': cur.execute("SELECT COUNT(*) FROM dim_servers").fetchone()[0]
+            'players': players,
+            'active_servers': active_servers,
+            'total_servers': total_servers
         }
+        
         if stats['total_servers'] > 0:
             stats['occupancy'] = round((stats['active_servers'] / stats['total_servers']) * 100, 1)
         else:

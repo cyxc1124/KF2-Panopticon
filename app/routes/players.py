@@ -15,7 +15,7 @@ def players():
     stats = get_global_stats(cur)
     
     with StepTimer("Players List Query"):
-        players_rows = cur.execute("""
+        cur.execute("""
             SELECT 
                 dp.id as player_id,
                 dp.name as player_name, 
@@ -34,7 +34,8 @@ def players():
             JOIN dim_servers ds ON fa.server_id = ds.id
             LEFT JOIN dim_maps dm ON fa.map_id = dm.id
             ORDER BY fa.score DESC
-        """).fetchall()
+        """)
+        players_rows = cur.fetchall()
 
     with StepTimer("Geo Resolution Loop"):
         players_data = []
@@ -58,18 +59,22 @@ def players():
 def player_detail(player_id):
     """玩家详情页"""
     db = get_db_connection()
+    cur = db.cursor()
     page = request.args.get('page', 1, type=int)
     offset = (page - 1) * PER_PAGE
 
     with StepTimer("Player Info Query"):
-        player = db.execute("SELECT * FROM dim_players WHERE id = ?", (player_id,)).fetchone()
+        cur.execute("SELECT * FROM dim_players WHERE id = %s", (player_id,))
+        player = cur.fetchone()
         if not player:
             return "Player not found.", 404
 
-        count = db.execute("SELECT COUNT(*) FROM fact_history WHERE player_id = ?", (player_id,)).fetchone()[0]
+        cur.execute("SELECT COUNT(*) as total FROM fact_history WHERE player_id = %s", (player_id,))
+        count_row = cur.fetchone()
+        count = count_row['total'] if count_row else 0
     
     with StepTimer("Player History Query"):
-        history_rows = db.execute("""
+        cur.execute("""
             SELECT 
                 s.id as server_id, 
                 s.name as server_name, 
@@ -82,10 +87,11 @@ def player_detail(player_id):
                 s.location
             FROM fact_history h
             JOIN dim_servers s ON h.server_id = s.id
-            WHERE h.player_id = ?
+            WHERE h.player_id = %s
             ORDER BY h.session_start DESC
-            LIMIT ? OFFSET ?
-        """, (player_id, PER_PAGE, offset)).fetchall()
+            LIMIT %s OFFSET %s
+        """, (player_id, PER_PAGE, offset))
+        history_rows = cur.fetchall()
 
     history = []
     for row in history_rows:
@@ -101,7 +107,7 @@ def player_detail(player_id):
         history.append(h)
 
     with StepTimer("Teammates Query"):
-        teammates = db.execute("""
+        cur.execute("""
             SELECT 
                 p2.id,
                 p2.name,
@@ -110,28 +116,30 @@ def player_detail(player_id):
             FROM fact_history h1
             JOIN fact_history h2 ON h1.session_uuid = h2.session_uuid
             JOIN dim_players p2 ON h2.player_id = p2.id
-            WHERE h1.player_id = ?      
-              AND h2.player_id != ?     
+            WHERE h1.player_id = %s      
+              AND h2.player_id != %s     
               AND h1.session_uuid IS NOT NULL
-            GROUP BY p2.id
+            GROUP BY p2.id, p2.name
             ORDER BY matches_together DESC
             LIMIT 20
-        """, (player_id, player_id)).fetchall()
+        """, (player_id, player_id))
+        teammates = cur.fetchall()
 
     with StepTimer("Allegiances Query"):
-        allegiances = db.execute("""
+        cur.execute("""
             SELECT 
                 s.operator_name,
                 COUNT(h.id) as sessions_played,
                 SUM(h.calculated_duration) as time_played
             FROM fact_history h
             JOIN dim_servers s ON h.server_id = s.id
-            WHERE h.player_id = ? 
+            WHERE h.player_id = %s 
               AND s.operator_name IS NOT NULL 
               AND s.operator_name != 'Unknown'
             GROUP BY s.operator_name
             ORDER BY sessions_played DESC
-        """, (player_id,)).fetchall()
+        """, (player_id,))
+        allegiances = cur.fetchall()
 
     pagination = get_pagination(count, page, PER_PAGE)
     

@@ -20,8 +20,10 @@ def factions():
         with StepTimer("Cache Hit Processing"):
             pass 
     else:
+        cur = db.cursor()
+        
         with StepTimer("Query: Live Top 5"):
-            live_top_5 = db.execute("""
+            cur.execute("""
                 SELECT 
                     operator_name,
                     SUM(player_count) as current_players,
@@ -33,10 +35,11 @@ def factions():
                 GROUP BY operator_name
                 ORDER BY current_players DESC
                 LIMIT 6
-            """).fetchall()
+            """)
+            live_top_5 = cur.fetchall()
 
         with StepTimer("Query: Last 30 Days (HEAVY)"):
-            month_rows = db.execute("""
+            cur.execute("""
                 SELECT
                     operator_name,
                     SUM(server_count) AS server_count,
@@ -44,13 +47,14 @@ def factions():
                     SUM(total_playtime_seconds) AS total_playtime_seconds,
                     MAX(last_contact) AS last_contact
                 FROM fact_operator_daily
-                WHERE day >= date('now', '-30 days')
+                WHERE day >= (CURRENT_DATE - INTERVAL '30 days')::DATE
                 GROUP BY operator_name
-                ORDER BY unique_players DESC;
-            """).fetchall()
+                ORDER BY unique_players DESC
+            """)
+            month_rows = cur.fetchall()
 
         with StepTimer("Query: All Time (HEAVY)"):
-            all_time_rows = db.execute("""
+            cur.execute("""
                 SELECT
                     operator_name,
                     SUM(unique_players) AS unique_players,
@@ -58,8 +62,9 @@ def factions():
                 FROM fact_operator_daily
                 GROUP BY operator_name
                 ORDER BY total_playtime_seconds DESC
-                LIMIT 50;
-            """).fetchall()
+                LIMIT 50
+            """)
+            all_time_rows = cur.fetchall()
 
         with StepTimer("Data Processing"):
             live_top_5 = [dict(r) for r in live_top_5]

@@ -28,13 +28,14 @@ def index():
     
     params = []
     if target_faction:
-        base_query += " WHERE s.operator_name = ?"
+        base_query += " WHERE s.operator_name = %s"
         params.append(target_faction)
         
     base_query += " ORDER BY s.player_count DESC"
     
     with StepTimer("Servers List Query"):
-        server_rows = cur.execute(base_query, params).fetchall()
+        cur.execute(base_query, params)
+        server_rows = cur.fetchall()
     
     with StepTimer("Process/Geo Resolution"):
         servers_list = []
@@ -65,18 +66,21 @@ def search():
             return render_template('search_results.html', query=q, players=[], servers=[])
 
         db = get_db_connection()
+        cur = db.cursor()
         wildcard_q = f"%{q}%"
 
-        players = db.execute("""
-            SELECT id, name FROM dim_players WHERE name LIKE ? ORDER BY length(name) ASC LIMIT 50
-        """, (wildcard_q,)).fetchall()
+        cur.execute("""
+            SELECT id, name FROM dim_players WHERE name LIKE %s ORDER BY length(name) ASC LIMIT 50
+        """, (wildcard_q,))
+        players = cur.fetchall()
 
-        server_rows = db.execute("""
+        cur.execute("""
             SELECT id, name, ip_address, game_port, query_port, last_seen, location
             FROM dim_servers 
-            WHERE name LIKE ? OR (ip_address || ':' || game_port) LIKE ? 
+            WHERE name LIKE %s OR (ip_address || ':' || game_port::text) LIKE %s 
             ORDER BY last_seen DESC LIMIT 50
-        """, (wildcard_q, wildcard_q)).fetchall()
+        """, (wildcard_q, wildcard_q))
+        server_rows = cur.fetchall()
 
         servers = []
         for row in server_rows:
