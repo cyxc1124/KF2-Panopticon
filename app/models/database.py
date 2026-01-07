@@ -1,5 +1,5 @@
 """
-数据库抽象层 - PostgreSQL
+数据库抽象层 - PostgreSQL (with connection pooling)
 """
 import os
 import threading
@@ -9,6 +9,10 @@ try:
     import config
 except ImportError:
     config = None
+
+# 全局连接池（线程安全）
+_connection_pool = None
+_pool_lock = threading.Lock()
 
 
 class DatabaseConfig:
@@ -33,26 +37,57 @@ class DatabaseConfig:
 
 
 class Database:
-    """PostgreSQL 数据库接口（线程安全）"""
+    """PostgreSQL 数据库接口（使用连接池）"""
     
     def __init__(self, config=None):
         self.config = config or DatabaseConfig()
         self.db_type = 'postgresql'
-        # 使用 threading.local() 存储每个线程的连接
+        # 使用 threading.local() 存储每个线程当前使用的连接
         self._local = threading.local()
+        # 初始化连接池
+        self._init_pool()
+    
+    def _init_pool(self):
+        """初始化连接池（全局单例）"""
+        global _connection_pool
+        if _connection_pool is None:
+            with _pool_lock:
+                if _connection_pool is None:  # Double-check locking
+                    import time
+                    from psycopg2 import pool
+                    start = time.time()
+                    
+                    # 从环境变量读取连接池配置
+                    min_conn = int(os.environ.get('DB_POOL_MIN', '2'))
+                    max_conn = int(os.environ.get('DB_POOL_MAX', '10'))
+                    
+                    _connection_pool = pool.ThreadedConnectionPool(
+                        minconn=min_conn,
+                        maxconn=max_conn,
+                        host=self.config.pg_host,
+                        port=self.config.pg_port,
+                        database=self.config.pg_database,
+                        user=self.config.pg_user,
+                        password=self.config.pg_password
+                    )
+                    duration = (time.time() - start) * 1000
+                    print(f"[INFO] Connection pool initialized: min={min_conn}, max={max_conn}, duration={duration:.2f}ms")
     
     def connect(self):
-        """建立数据库连接（线程安全）"""
-        if not hasattr(self._local, 'connection') or self._local.connection is None:
-            import psycopg2
-            conn_string = self.config.get_connection_string()
-            self._local.connection = psycopg2.connect(conn_string)
+        """从连接池获取连接（线程安全）"""
+        import time
+        if not hasattr(self._local, 'connection') or self._local.connection is None or self._local.connection.closed:
+            start = time.time()
+            self._local.connection = _connection_pool.getconn()
+            duration = (time.time() - start) * 1000
+            print(f"[DEBUG] Thread {threading.current_thread().name}: Got connection from pool in {duration:.2f}ms")
         return self._local.connection
     
     def close(self):
-        """关闭当前线程的数据库连接"""
-        if hasattr(self._local, 'connection') and self._local.connection:
-            self._local.connection.close()
+        """将连接归还到连接池（而不是真正关闭）"""
+        if hasattr(self._local, 'connection') and self._local.connection and not self._local.connection.closed:
+            _connection_pool.putconn(self._local.connection)
+            print(f"[DEBUG] Thread {threading.current_thread().name}: Returned connection to pool")
             self._local.connection = None
     
     @contextmanager

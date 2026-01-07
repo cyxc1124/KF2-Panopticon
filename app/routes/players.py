@@ -10,8 +10,11 @@ PER_PAGE = 50
 @players_bp.route('/players')
 def players():
     """玩家列表页"""
-    db = get_db_connection()
-    cur = db.get_cursor()
+    with StepTimer("Get DB Instance"):
+        db = get_db_connection()
+    
+    with StepTimer("Get Cursor"):
+        cur = db.get_cursor()
     
     with StepTimer("Global Stats Query"):
         stats = get_global_stats(cur)
