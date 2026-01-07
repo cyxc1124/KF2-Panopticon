@@ -67,9 +67,9 @@ def factions():
             all_time_rows = cur.fetchall()
 
         with StepTimer("Data Processing"):
-            live_top_5 = [dict(r) for r in live_top_5]
-            month_rows = [dict(r) for r in month_rows]
-            all_time_rows = [dict(r) for r in all_time_rows]
+            live_top_5 = [{**r} for r in live_top_5]
+            month_rows = [{**r} for r in month_rows]
+            all_time_rows = [{**r} for r in all_time_rows]
 
             top_10_month = month_rows[:10]
             chart_data = {

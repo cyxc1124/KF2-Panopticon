@@ -58,10 +58,10 @@ def get_match_history(db, server_id, page, per_page):
             uid = r['session_uuid']
             if uid not in roster_map:
                 roster_map[uid] = []
-            roster_map[uid].append(dict(r))
+            roster_map[uid].append({**r})
             
         for s in session_rows:
-            match = dict(s)
+            match = {**s}
             match['roster'] = roster_map.get(s['session_uuid'], [])
             matches.append(match)
             
@@ -80,7 +80,7 @@ def server_detail(server_id):
         server = cur.fetchone()
         if not server:
             return "Server not found.", 404
-        s_dict = dict(server)
+        s_dict = {**server}
 
         if s_dict['game_port'] and s_dict['game_port'] > 0:
             s_dict['display_addr'] = f"{s_dict['ip_address']}:{s_dict['game_port']}"

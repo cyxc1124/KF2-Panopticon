@@ -40,7 +40,7 @@ def players():
     with StepTimer("Geo Resolution Loop"):
         players_data = []
         for row in players_rows:
-            p = dict(row)
+            p = {**row}
             if p['game_port'] and p['game_port'] > 0:
                 p['address'] = f"{p['ip_address']}:{p['game_port']}"
             else:
@@ -95,7 +95,7 @@ def player_detail(player_id):
 
     history = []
     for row in history_rows:
-        h = dict(row)
+        h = {**row}
         if h['game_port'] and h['game_port'] > 0:
             h['address'] = f"{h['ip_address']}:{h['game_port']}"
         else:

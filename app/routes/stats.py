@@ -64,7 +64,7 @@ def statistics():
 
             server_stats = []
             for row in server_rows:
-                d = dict(row)
+                d = {**row}
                 if d['game_port'] and d['game_port'] > 0:
                     d['address'] = f"{d['ip_address']}:{d['game_port']}"
                 else:
@@ -122,12 +122,12 @@ def statistics():
             chart_history = cur.fetchall()
         
         with StepTimer("Data Formatting"):
-            map_stats = [dict(r) for r in map_stats]
-            daily_traffic = [dict(r) for r in daily_traffic]
-            player_rows = [dict(r) for r in player_rows]
-            chart_24h = [dict(r) for r in chart_24h]
-            chart_30d = [dict(r) for r in chart_30d]
-            chart_history = [dict(r) for r in chart_history]
+            map_stats = [{**r} for r in map_stats]
+            daily_traffic = [{**r} for r in daily_traffic]
+            player_rows = [{**r} for r in player_rows]
+            chart_24h = [{**r} for r in chart_24h]
+            chart_30d = [{**r} for r in chart_30d]
+            chart_history = [{**r} for r in chart_history]
         
         cache.set('stats_page', (map_stats, daily_traffic, server_stats, player_rows, chart_24h, chart_30d, chart_history))
 

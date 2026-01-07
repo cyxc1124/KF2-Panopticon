@@ -40,7 +40,7 @@ def index():
     with StepTimer("Process/Geo Resolution"):
         servers_list = []
         for row in server_rows:
-            s = dict(row)
+            s = {**row}
             if s['game_port'] and s['game_port'] > 0:
                 s['display_addr'] = f"{s['ip_address']}:{s['game_port']}"
                 s['is_fallback'] = False
@@ -84,7 +84,7 @@ def search():
 
         servers = []
         for row in server_rows:
-            s = dict(row)
+            s = {**row}
             if s['game_port'] and s['game_port'] > 0:
                 s['address'] = f"{s['ip_address']}:{s['game_port']}"
             else:
