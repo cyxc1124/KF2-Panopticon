@@ -8,6 +8,57 @@ from pathlib import Path
 from app.models.database import get_database
 
 
+def _ensure_postgresql_database_exists():
+    """
+    确保 PostgreSQL 数据库存在，如果不存在则创建
+    
+    Returns:
+        bool: 数据库是否存在或创建成功
+    """
+    try:
+        import config
+        import psycopg2
+        from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+        
+        # 连接到默认的 postgres 数据库
+        conn = psycopg2.connect(
+            host=config.POSTGRES_HOST,
+            port=config.POSTGRES_PORT,
+            user=config.POSTGRES_USER,
+            password=config.POSTGRES_PASSWORD,
+            database='postgres'  # 连接到默认数据库
+        )
+        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        cur = conn.cursor()
+        
+        # 检查目标数据库是否存在
+        cur.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s",
+            (config.POSTGRES_DB,)
+        )
+        
+        if cur.fetchone():
+            print(f"[OK] Database '{config.POSTGRES_DB}' already exists")
+            cur.close()
+            conn.close()
+            return True
+        
+        # 数据库不存在，创建它
+        print(f"[INFO] Database '{config.POSTGRES_DB}' does not exist, creating...")
+        cur.execute(f'CREATE DATABASE "{config.POSTGRES_DB}"')
+        print(f"[OK] Database '{config.POSTGRES_DB}' created successfully")
+        
+        cur.close()
+        conn.close()
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to ensure database exists: {e}")
+        print("\nPlease manually create the database:")
+        print(f"  psql -U {config.POSTGRES_USER} -h {config.POSTGRES_HOST} -c \"CREATE DATABASE {config.POSTGRES_DB};\"")
+        return False
+
+
 
 
 def init_database(force=False):
@@ -26,6 +77,13 @@ def init_database(force=False):
     print("Database Initialization")
     print("=" * 80)
     
+    print(f"\n数据库类型: {db.db_type}")
+    
+    # 对于 PostgreSQL，先确保数据库存在
+    if db.db_type == 'postgresql':
+        if not _ensure_postgresql_database_exists():
+            return False
+    
     # 检查是否已初始化
     if not force:
         try:
@@ -38,8 +96,6 @@ def init_database(force=False):
         except Exception:
             # 表可能不存在，继续初始化
             pass
-    
-    print(f"\n数据库类型: {db.db_type}")
     
     if db.db_type == 'postgresql':
         return _init_postgresql(db)
