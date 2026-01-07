@@ -104,7 +104,7 @@
                                 <td class="text-center text-secondary">{{ row.total_playtime_seconds|human_time }}</td>
                                 <td class="text-end pe-4 small text-muted">
                                     <span class="local-time" data-time="{{ row.last_contact }}">
-                                        {{ row.last_contact[:10] }}
+                                        {{ (row.last_contact|datetime_str)[:10] if row.last_contact else 'N/A' }}
                                     </span>
                                 </td>
                             </tr>
