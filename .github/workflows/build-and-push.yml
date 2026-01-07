@@ -1,0 +1,121 @@
+name: Build and Push to GHCR
+
+on:
+  push:
+    branches: 
+      - main
+      - develop
+    tags:
+      - 'v*'
+  pull_request:
+    branches: 
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史以便获取正确的版本信息
+
+      - name: Extract version metadata
+        id: version
+        run: |
+          # 获取Git信息
+          GIT_COMMIT=$(git rev-parse HEAD)
+          GIT_BRANCH=${GITHUB_REF#refs/heads/}
+          GIT_TAG=""
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          BUILD_NUMBER=${{ github.run_number }}
+          
+          # 如果是tag推送，提取tag名称
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            GIT_TAG=${GITHUB_REF#refs/tags/}
+            GIT_BRANCH=""
+          fi
+          
+          # 设置输出变量
+          echo "git-commit=${GIT_COMMIT}" >> $GITHUB_OUTPUT
+          echo "git-branch=${GIT_BRANCH}" >> $GITHUB_OUTPUT
+          echo "git-tag=${GIT_TAG}" >> $GITHUB_OUTPUT
+          echo "build-time=${BUILD_TIME}" >> $GITHUB_OUTPUT
+          echo "build-number=${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          
+          # 打印信息
+          echo "Git Tag: ${GIT_TAG}"
+          echo "Git Branch: ${GIT_BRANCH}"
+          echo "Git Commit: ${GIT_COMMIT:0:8}"
+          echo "Build Time: ${BUILD_TIME}"
+          echo "Build Number: ${BUILD_NUMBER}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # 为默认分支设置 latest 标签
+            type=raw,value=latest,enable={{is_default_branch}}
+            # 为标签设置版本号 (v1.0.0)
+            type=ref,event=tag
+            # 为分支设置分支名称 (main, develop)
+            type=ref,event=branch
+            # 为 PR 设置 pr-number (pr-123)
+            type=ref,event=pr
+            # 设置 SHA 短版本用于精确版本控制 (62a0c2d)
+            type=sha,format=short
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_TAG=${{ steps.version.outputs.git-tag }}
+            GIT_COMMIT=${{ steps.version.outputs.git-commit }}
+            GIT_BRANCH=${{ steps.version.outputs.git-branch }}
+            BUILD_TIME=${{ steps.version.outputs.build-time }}
+            BUILD_NUMBER=${{ steps.version.outputs.build-number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Build Summary
+        run: |
+          echo "## 构建完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 版本信息" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git Tag**: ${{ steps.version.outputs.git-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git Branch**: ${{ steps.version.outputs.git-branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git Commit**: ${{ steps.version.outputs.git-commit }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Time**: ${{ steps.version.outputs.build-time }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Number**: ${{ steps.version.outputs.build-number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker 镜像" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY 
