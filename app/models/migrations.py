@@ -58,23 +58,65 @@ class MigrationManager:
     
     def _ensure_migrations_table(self):
         """确保迁移跟踪表存在"""
+        import psycopg2
+        import psycopg2.extras
+        from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+        
         # 执行 V000__schema_version.sql
         v000_file = self.migrations_dir / 'V000__schema_version.sql'
-        if v000_file.exists():
-            with open(v000_file, 'r', encoding='utf-8') as f:
-                sql = f.read()
+        if not v000_file.exists():
+            print("[ERROR] V000__schema_version.sql not found")
+            return
+        
+        with open(v000_file, 'r', encoding='utf-8') as f:
+            sql = f.read()
+        
+        # 清理 SQL
+        lines = []
+        for line in sql.split('\n'):
+            stripped = line.strip()
+            if stripped and not stripped.startswith('--'):
+                lines.append(line)
+        
+        cleaned_sql = '\n'.join(lines)
+        
+        # 分割语句
+        statements = []
+        for s in cleaned_sql.split(';'):
+            stmt = s.strip()
+            if stmt:
+                statements.append(stmt)
+        
+        if not statements:
+            print("[WARN] V000 contains no executable statements")
+            return
+        
+        conn = self.db.connect()
+        # 设置为 autocommit 模式
+        old_isolation = conn.isolation_level
+        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        
+        try:
+            for i, stmt in enumerate(statements, 1):
+                try:
+                    cur = conn.cursor()
+                    cur.execute(stmt)
+                    cur.close()
+                    print(f"[DEBUG] V000 statement {i}/{len(statements)} executed")
+                except psycopg2.Error as e:
+                    # 忽略 "already exists" 错误
+                    if 'already exists' in str(e).lower():
+                        print(f"[DEBUG] V000 statement {i}: already exists (skipped)")
+                    else:
+                        print(f"[ERROR] V000 statement {i} failed: {e}")
+                        raise
             
-            conn = self.db.connect()
-            cur = conn.cursor()
-            try:
-                cur.execute(sql)
-                conn.commit()
-                print("[OK] Migration tracking table ensured")
-            except Exception as e:
-                print(f"[WARN] Failed to create migration tracking table: {e}")
-                conn.rollback()
-            finally:
-                cur.close()
+            print("[OK] Migration tracking table ensured")
+        except Exception as e:
+            print(f"[ERROR] Failed to create migration tracking table: {e}")
+        finally:
+            # 恢复原来的隔离级别
+            conn.set_isolation_level(old_isolation)
     
     def get_all_migrations(self) -> List[Migration]:
         """获取所有迁移文件（按版本号排序）"""
@@ -97,8 +139,10 @@ class MigrationManager:
     
     def get_applied_migrations(self) -> List[Tuple[str, str]]:
         """获取已应用的迁移（返回版本号和校验和）"""
+        import psycopg2.extras
+        
         conn = self.db.connect()
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         try:
             cur.execute("""
@@ -107,9 +151,16 @@ class MigrationManager:
                 WHERE success = TRUE
                 ORDER BY version
             """)
-            return [(row['version'], row['checksum']) for row in cur.fetchall()]
-        except Exception:
-            # 如果表不存在，返回空列表
+            results = cur.fetchall()
+            print(f"[DEBUG] Found {len(results)} applied migrations in database")
+            return [(row['version'], row['checksum']) for row in results]
+        except Exception as e:
+            # 如果表不存在或查询失败，回滚并返回空列表
+            print(f"[DEBUG] Failed to query applied migrations: {e}")
+            try:
+                conn.rollback()
+            except:
+                pass
             return []
         finally:
             cur.close()
@@ -127,8 +178,10 @@ class MigrationManager:
         检测是否为旧版本初始化的数据库
         返回: True 如果数据库已初始化但没有 schema_migrations 表
         """
+        import psycopg2.extras
+        
         conn = self.db.connect()
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         try:
             # 检查 schema_migrations 表是否存在
@@ -156,7 +209,12 @@ class MigrationManager:
             
             return has_core_tables  # 有核心表但没有迁移表 = 旧版本数据库
             
-        except Exception:
+        except Exception as e:
+            print(f"[DEBUG] Legacy detection failed: {e}")
+            try:
+                conn.rollback()
+            except:
+                pass
             return False
         finally:
             cur.close()
@@ -166,11 +224,13 @@ class MigrationManager:
         导入旧版本数据库状态
         将 V001 标记为已执行，而不实际执行
         """
+        import psycopg2.extras
+        
         print("\n[INFO] Detected legacy database (initialized without migration system)")
         print("[INFO] Importing existing database state...")
         
         conn = self.db.connect()
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         try:
             # 确保 schema_migrations 表存在
@@ -210,10 +270,12 @@ class MigrationManager:
     
     def apply_migration(self, migration: Migration) -> bool:
         """应用单个迁移"""
+        import psycopg2.extras
+        
         print(f"\n[INFO] Applying migration V{migration.version}: {migration.description}...")
         
         conn = self.db.connect()
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         start_time = time.time()
         success = False
