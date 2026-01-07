@@ -2,16 +2,12 @@
 from app.models.database import (
     Database,
     DatabaseConfig,
-    DatabaseAdapter,
-    get_database,
-    get_connection
+    get_database
 )
 
 __all__ = [
     'Database',
     'DatabaseConfig',
-    'DatabaseAdapter',
-    'get_database',
-    'get_connection'
+    'get_database'
 ]
 
