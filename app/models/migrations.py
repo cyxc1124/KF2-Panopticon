@@ -223,11 +223,30 @@ class MigrationManager:
             # 读取并执行 SQL
             sql = migration.read_sql()
             
-            # 分割为多个语句（以分号分隔）
-            statements = [s.strip() for s in sql.split(';') if s.strip()]
+            # 清理 SQL：移除纯注释行和空行
+            lines = []
+            for line in sql.split('\n'):
+                stripped = line.strip()
+                # 跳过空行和纯注释行
+                if stripped and not stripped.startswith('--'):
+                    lines.append(line)
             
-            for i, statement in enumerate(statements, 1):
-                if statement:
+            cleaned_sql = '\n'.join(lines)
+            
+            # 分割为多个语句（以分号分隔）
+            statements = []
+            for s in cleaned_sql.split(';'):
+                stmt = s.strip()
+                # 只保留非空且不是纯注释的语句
+                if stmt and not stmt.startswith('--'):
+                    statements.append(stmt)
+            
+            if not statements:
+                print(f"[WARN] Migration V{migration.version} contains no executable statements")
+                # 标记为成功但警告
+                execution_time = 0
+            else:
+                for i, statement in enumerate(statements, 1):
                     try:
                         cur.execute(statement)
                         conn.commit()
@@ -240,8 +259,8 @@ class MigrationManager:
                             continue
                         else:
                             raise
-            
-            execution_time = int((time.time() - start_time) * 1000)
+                
+                execution_time = int((time.time() - start_time) * 1000)
             
             # 记录迁移成功
             cur.execute("""

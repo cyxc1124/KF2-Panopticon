@@ -1,23 +1,18 @@
--- Performance Optimization: Add indexes for frequently queried columns
--- This migration adds indexes to improve query performance
+-- Performance Optimization: Add additional indexes for query performance
+-- Note: V001 already includes basic indexes, this adds supplementary ones
 
--- Indexes for fact_active (current online players)
-CREATE INDEX IF NOT EXISTS idx_fact_active_player_id ON fact_active(player_id);
-CREATE INDEX IF NOT EXISTS idx_fact_active_server_id ON fact_active(server_id);
+-- Additional composite index for player name searches (case-insensitive)
+CREATE INDEX IF NOT EXISTS idx_dim_players_name_lower ON dim_players(LOWER(name));
 
--- Indexes for fact_history (player session history)
-CREATE INDEX IF NOT EXISTS idx_fact_history_player_id ON fact_history(player_id);
-CREATE INDEX IF NOT EXISTS idx_fact_history_server_id ON fact_history(server_id);
-CREATE INDEX IF NOT EXISTS idx_fact_history_session_start ON fact_history(session_start);
+-- Index for server operator queries
+CREATE INDEX IF NOT EXISTS idx_dim_servers_operator_player ON dim_servers(operator_name, player_count);
 
--- Indexes for dim_servers (server information)
-CREATE INDEX IF NOT EXISTS idx_dim_servers_player_count ON dim_servers(player_count);
-CREATE INDEX IF NOT EXISTS idx_dim_servers_last_seen ON dim_servers(last_seen);
+-- Index for map-based queries
+CREATE INDEX IF NOT EXISTS idx_dim_maps_name ON dim_maps(name);
 
--- Indexes for dim_players (player information)
-CREATE INDEX IF NOT EXISTS idx_dim_players_last_seen ON dim_players(last_seen);
-
--- Composite indexes for common query patterns
-CREATE INDEX IF NOT EXISTS idx_fact_history_player_session ON fact_history(player_id, session_start);
-CREATE INDEX IF NOT EXISTS idx_fact_server_history_timestamp ON fact_server_history(timestamp);
+-- Indexes for daily aggregation tables (composite indexes for common query patterns)
+CREATE INDEX IF NOT EXISTS idx_operator_daily_operator_day ON fact_operator_daily(operator_name, day DESC);
+CREATE INDEX IF NOT EXISTS idx_map_daily_map_day ON fact_map_daily(map_id, day DESC);
+CREATE INDEX IF NOT EXISTS idx_server_daily_server_day ON fact_server_daily(server_id, day DESC);
+CREATE INDEX IF NOT EXISTS idx_player_daily_player_day ON fact_player_daily(player_id, day DESC);
 
