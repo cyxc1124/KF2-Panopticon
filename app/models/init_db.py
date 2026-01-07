@@ -37,19 +37,24 @@ def _ensure_postgresql_database_exists():
             (config.POSTGRES_DB,)
         )
         
+        database_created = False
         if cur.fetchone():
             print(f"[OK] Database '{config.POSTGRES_DB}' already exists")
-            cur.close()
-            conn.close()
-            return True
-        
-        # 数据库不存在，创建它
-        print(f"[INFO] Database '{config.POSTGRES_DB}' does not exist, creating...")
-        cur.execute(f'CREATE DATABASE "{config.POSTGRES_DB}"')
-        print(f"[OK] Database '{config.POSTGRES_DB}' created successfully")
+        else:
+            # 数据库不存在，创建它
+            print(f"[INFO] Database '{config.POSTGRES_DB}' does not exist, creating...")
+            cur.execute(f'CREATE DATABASE "{config.POSTGRES_DB}"')
+            print(f"[OK] Database '{config.POSTGRES_DB}' created successfully")
+            database_created = True
         
         cur.close()
         conn.close()
+        
+        # 如果创建了新数据库，需要重置全局连接池
+        if database_created:
+            print("[INFO] Resetting connection pool after database creation...")
+            _reset_connection_pool()
+        
         return True
         
     except Exception as e:
@@ -57,6 +62,21 @@ def _ensure_postgresql_database_exists():
         print("\nPlease manually create the database:")
         print(f"  psql -U {config.POSTGRES_USER} -h {config.POSTGRES_HOST} -c \"CREATE DATABASE {config.POSTGRES_DB};\"")
         return False
+
+
+def _reset_connection_pool():
+    """重置全局连接池（在创建数据库后调用）"""
+    try:
+        from app.models import database
+        
+        # 关闭现有连接池
+        if database._connection_pool is not None:
+            print("[DEBUG] Closing existing connection pool...")
+            database._connection_pool.closeall()
+            database._connection_pool = None
+            print("[DEBUG] Connection pool reset successfully")
+    except Exception as e:
+        print(f"[WARN] Failed to reset connection pool: {e}")
 
 
 def init_database(force=False):
