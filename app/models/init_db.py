@@ -3,8 +3,11 @@
 自动检测并初始化数据库表结构（幂等操作）
 """
 import os
+import sys
 from pathlib import Path
 from app.models.database import get_database
+
+
 
 
 def init_database(force=False):
@@ -20,7 +23,7 @@ def init_database(force=False):
     db = get_database()
     
     print("=" * 80)
-    print("数据库初始化")
+    print("Database Initialization")
     print("=" * 80)
     
     # 检查是否已初始化
@@ -30,7 +33,7 @@ def init_database(force=False):
                 cur.execute("SELECT COUNT(*) as cnt FROM meta_kv WHERE key = 'db_initialized'")
                 result = cur.fetchone()
                 if result and result['cnt'] > 0:
-                    print("✅ 数据库已初始化，跳过")
+                    print("[OK] Database already initialized, skipping")
                     return True
         except Exception:
             # 表可能不存在，继续初始化
@@ -52,7 +55,7 @@ def _init_postgresql(db):
     sql_file = Path(__file__).parent.parent.parent / 'init_postgresql.sql'
     
     if not sql_file.exists():
-        print(f"❌ 找不到初始化脚本: {sql_file}")
+        print(f"[ERROR] Initialization script not found: {sql_file}")
         return False
     
     try:
@@ -90,7 +93,7 @@ def _init_postgresql(db):
             except Exception as e:
                 # 某些语句可能失败（如显示表列表），但不影响初始化
                 if 'CREATE' in statement or 'INSERT' in statement:
-                    print(f"⚠️  语句 {i} 执行失败: {str(e)[:50]}")
+                    print(f"[WARN] Statement {i} execution failed: {str(e)[:50]}")
         
         conn.commit()
         
@@ -102,12 +105,12 @@ def _init_postgresql(db):
         """)
         conn.commit()
         
-        print(f"\n✅ PostgreSQL 初始化完成！")
+        print(f"\n[OK] PostgreSQL initialization completed!")
         print(f"   成功执行 {success_count}/{len(statements)} 条语句")
         return True
         
     except Exception as e:
-        print(f"\n❌ PostgreSQL 初始化失败: {e}")
+        print(f"\n[ERROR] PostgreSQL initialization failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -121,7 +124,7 @@ def _init_sqlite(db):
     sql_file = Path(__file__).parent.parent.parent / 'init_sqlite.sql'
     
     if not sql_file.exists():
-        print(f"❌ 找不到初始化脚本: {sql_file}")
+        print(f"[ERROR] Initialization script not found: {sql_file}")
         return False
     
     try:
@@ -159,7 +162,7 @@ def _init_sqlite(db):
             except Exception as e:
                 # 某些语句可能失败（如 PRAGMA），但不影响初始化
                 if 'CREATE' in statement or 'INSERT' in statement:
-                    print(f"⚠️  语句 {i} 执行失败: {str(e)[:50]}")
+                    print(f"[WARN] Statement {i} execution failed: {str(e)[:50]}")
         
         conn.commit()
         
@@ -170,12 +173,12 @@ def _init_sqlite(db):
         """)
         conn.commit()
         
-        print(f"\n✅ SQLite 初始化完成！")
+        print(f"\n[OK] SQLite initialization completed!")
         print(f"   成功执行 {success_count}/{len(statements)} 条语句")
         return True
         
     except Exception as e:
-        print(f"\n❌ SQLite 初始化失败: {e}")
+        print(f"\n[ERROR] SQLite initialization failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -240,7 +243,7 @@ if __name__ == '__main__':
     
     if init_database(force=force):
         print("\n" + "=" * 80)
-        print("✅ 数据库初始化成功！")
+        print("[OK] Database initialization successful!")
         print("=" * 80)
         
         # 显示状态
@@ -252,7 +255,7 @@ if __name__ == '__main__':
         sys.exit(0)
     else:
         print("\n" + "=" * 80)
-        print("❌ 数据库初始化失败")
+        print("[ERROR] Database initialization failed")
         print("=" * 80)
         sys.exit(1)
 
