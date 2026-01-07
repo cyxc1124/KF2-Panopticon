@@ -1,5 +1,5 @@
 """
-KF2-Panopticon 配置文件
+KF2-Panopticon 配置文件 - PostgreSQL
 优先从环境变量读取配置，支持容器化部署（Docker/K8s）
 """
 import os
@@ -30,14 +30,7 @@ if not STEAM_KEY:
     if steam_key_file.exists():
         STEAM_KEY = steam_key_file.read_text().strip()
 
-# ==================== 数据库配置 ====================
-# 数据库类型: 'sqlite' 或 'postgresql'
-DB_TYPE = os.environ.get('DB_TYPE', 'sqlite')
-
-# SQLite 配置
-DB_FILE = os.environ.get('DB_FILE', str(BASE_DIR / 'kf2_panopticon.db'))
-
-# PostgreSQL 配置
+# ==================== PostgreSQL 数据库配置 ====================
 POSTGRES_HOST = os.environ.get('POSTGRES_HOST', 'localhost')
 POSTGRES_PORT = int(os.environ.get('POSTGRES_PORT', '5432'))
 POSTGRES_DB = os.environ.get('POSTGRES_DB', 'kf2_panopticon')
@@ -81,4 +74,3 @@ CACHE_TTL = int(os.environ.get('CACHE_TTL', '300'))  # 5分钟
 # ==================== 分页配置 ====================
 # 每页显示条目数
 PER_PAGE = int(os.environ.get('PER_PAGE', '50'))
-

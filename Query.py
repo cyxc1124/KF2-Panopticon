@@ -190,7 +190,7 @@ def resolve_geo_db(cur, ip_str):
         result = cur.execute("""
             SELECT city_name, country_code
             FROM ip_ranges 
-            WHERE ip_to >= ? 
+            WHERE ip_to >= %s 
             ORDER BY ip_to ASC 
             LIMIT 1
         """, (ip_int,))
@@ -309,34 +309,18 @@ def query_server(server_addr):
         except: pass
         
     return results if results["name"] else None
-def _execute(cur, sql, params=None):
-    """
-    执行 SQL 语句，自动转换占位符
-    兼容 SQLite (?) 和 PostgreSQL (%s)
-    """
-    db = get_database()
-    sql, params = db.adapter.convert_placeholders(sql, params)
-    if params:
-        cur.execute(sql, params)
-    else:
-        cur.execute(sql)
-
 def _kv_get(cur, key):
-    _execute(cur, "SELECT value FROM meta_kv WHERE key = ?", (key,))
+    cur.execute("SELECT value FROM meta_kv WHERE key = %s", (key,))
     row = cur.fetchone()
     if row:
         return row.get('value') or row[0] if isinstance(row, dict) else row[0]
     return None
 
 def _kv_set(cur, key, value):
-    # 使用全局数据库对象进行 SQL 翻译
-    db = get_database()
-    upsert_sql = db.adapter.adapt_sql("""
-        INSERT INTO meta_kv (key, value) VALUES (?, ?)
+    cur.execute("""
+        INSERT INTO meta_kv (key, value) VALUES (%s, %s)
         ON CONFLICT(key) DO UPDATE SET value=excluded.value
-    """)
-    sql, params = db.adapter.convert_placeholders(upsert_sql, (key, value))
-    cur.execute(sql, params)
+    """, (key, value))
 
 def backfill_rollups(cur):
     """
@@ -432,7 +416,7 @@ def refresh_recent_rollups(cur, scan_time, days_back=1):
     end_day = scan_time.strftime("%Y-%m-%d")
 
     # Operator daily
-    cur.execute("DELETE FROM fact_operator_daily WHERE day BETWEEN ? AND ?", (start_day, end_day))
+    cur.execute("DELETE FROM fact_operator_daily WHERE day BETWEEN %s AND %s", (start_day, end_day))
     cur.execute("""
         INSERT INTO fact_operator_daily (day, operator_name, server_count, unique_players, total_playtime_seconds, last_contact)
         SELECT
@@ -444,14 +428,14 @@ def refresh_recent_rollups(cur, scan_time, days_back=1):
             MAX(h.session_end) AS last_contact
         FROM fact_history h
         JOIN dim_servers s ON h.server_id = s.id
-        WHERE date(h.session_start) BETWEEN ? AND ?
+        WHERE date(h.session_start) BETWEEN %s AND %s
           AND s.operator_name IS NOT NULL
           AND s.operator_name != 'Unknown'
         GROUP BY day, s.operator_name
     """, (start_day, end_day))
 
     # Map daily
-    cur.execute("DELETE FROM fact_map_daily WHERE day BETWEEN ? AND ?", (start_day, end_day))
+    cur.execute("DELETE FROM fact_map_daily WHERE day BETWEEN %s AND %s", (start_day, end_day))
     cur.execute("""
         INSERT INTO fact_map_daily (day, map_id, session_count, total_seconds)
         SELECT
@@ -460,13 +444,13 @@ def refresh_recent_rollups(cur, scan_time, days_back=1):
             COUNT(f.id) AS session_count,
             COALESCE(SUM(f.calculated_duration), 0) AS total_seconds
         FROM fact_server_history f
-        WHERE date(f.session_start) BETWEEN ? AND ?
+        WHERE date(f.session_start) BETWEEN %s AND %s
           AND f.map_id IS NOT NULL
         GROUP BY day, f.map_id
     """, (start_day, end_day))
 
     # Server daily
-    cur.execute("DELETE FROM fact_server_daily WHERE day BETWEEN ? AND ?", (start_day, end_day))
+    cur.execute("DELETE FROM fact_server_daily WHERE day BETWEEN %s AND %s", (start_day, end_day))
     cur.execute("""
         INSERT INTO fact_server_daily (day, server_id, session_count, total_seconds)
         SELECT
@@ -475,13 +459,13 @@ def refresh_recent_rollups(cur, scan_time, days_back=1):
             COUNT(h.id) AS session_count,
             COALESCE(SUM(h.calculated_duration), 0) AS total_seconds
         FROM fact_history h
-        WHERE date(h.session_start) BETWEEN ? AND ?
+        WHERE date(h.session_start) BETWEEN %s AND %s
           AND h.server_id IS NOT NULL
         GROUP BY day, h.server_id
     """, (start_day, end_day))
 
     # Player daily
-    cur.execute("DELETE FROM fact_player_daily WHERE day BETWEEN ? AND ?", (start_day, end_day))
+    cur.execute("DELETE FROM fact_player_daily WHERE day BETWEEN %s AND %s", (start_day, end_day))
     cur.execute("""
         INSERT INTO fact_player_daily (day, player_id, session_count, total_seconds)
         SELECT
@@ -490,20 +474,20 @@ def refresh_recent_rollups(cur, scan_time, days_back=1):
             COUNT(h.id) AS session_count,
             COALESCE(SUM(h.calculated_duration), 0) AS total_seconds
         FROM fact_history h
-        WHERE date(h.session_start) BETWEEN ? AND ?
+        WHERE date(h.session_start) BETWEEN %s AND %s
           AND h.player_id IS NOT NULL
         GROUP BY day, h.player_id
     """, (start_day, end_day))
 
     # Daily traffic
-    cur.execute("DELETE FROM fact_traffic_daily WHERE day BETWEEN ? AND ?", (start_day, end_day))
+    cur.execute("DELETE FROM fact_traffic_daily WHERE day BETWEEN %s AND %s", (start_day, end_day))
     cur.execute("""
         INSERT INTO fact_traffic_daily (day, unique_players)
         SELECT
             date(h.session_start) AS day,
             COUNT(DISTINCT h.player_id) AS unique_players
         FROM fact_history h
-        WHERE date(h.session_start) BETWEEN ? AND ?
+        WHERE date(h.session_start) BETWEEN %s AND %s
           AND h.player_id IS NOT NULL
         GROUP BY day
     """, (start_day, end_day))
@@ -594,27 +578,19 @@ def main():
 
             def get_map_id(m_name):
                 if m_name in map_cache: return map_cache[m_name]
-                # 使用数据库抽象层的 INSERT OR IGNORE
-                insert_sql = db.adapter.adapt_sql("INSERT OR IGNORE INTO dim_maps (name) VALUES (?)")
-                cur.execute(insert_sql, (m_name,))
-                if cur.lastrowid:
-                    mid = cur.lastrowid
-                else:
-                    cur.execute("SELECT id FROM dim_maps WHERE name = ?", (m_name,))
-                    mid = cur.fetchone()['id']
+                # PostgreSQL: INSERT ... ON CONFLICT DO NOTHING
+                cur.execute("INSERT INTO dim_maps (name) VALUES (%s) ON CONFLICT (name) DO NOTHING", (m_name,))
+                cur.execute("SELECT id FROM dim_maps WHERE name = %s", (m_name,))
+                mid = cur.fetchone()['id']
                 map_cache[m_name] = mid
                 return mid
 
             def get_player_id(p_name):
                 if p_name in player_cache: return player_cache[p_name]
-                # 使用数据库抽象层的 INSERT OR IGNORE
-                insert_sql = db.adapter.adapt_sql("INSERT OR IGNORE INTO dim_players (name) VALUES (?)")
-                cur.execute(insert_sql, (p_name,))
-                if cur.lastrowid:
-                    pid = cur.lastrowid
-                else:
-                    cur.execute("SELECT id FROM dim_players WHERE name = ?", (p_name,))
-                    pid = cur.fetchone()['id']
+                # PostgreSQL: INSERT ... ON CONFLICT DO NOTHING
+                cur.execute("INSERT INTO dim_players (name) VALUES (%s) ON CONFLICT (name) DO NOTHING", (p_name,))
+                cur.execute("SELECT id FROM dim_players WHERE name = %s", (p_name,))
+                pid = cur.fetchone()['id']
                 player_cache[p_name] = pid
                 return pid
 
@@ -625,10 +601,10 @@ def main():
                 INSERT INTO fact_history (server_id, player_id, map_id, final_score, total_time, session_start, session_end, session_uuid, calculated_duration)
                 SELECT server_id, player_id, map_id, score, duration, first_seen, last_seen, session_uuid, calculated_duration
                 FROM fact_active
-                WHERE last_seen < ?
+                WHERE last_seen < %s
             """, (prune_limit,))
             
-            cur.execute("DELETE FROM fact_active WHERE last_seen < ?", (prune_limit,))
+            cur.execute("DELETE FROM fact_active WHERE last_seen < %s", (prune_limit,))
         
             for s in valid_results:
                 current_ip = s["addr"].split(':')[0]
@@ -647,11 +623,12 @@ def main():
                 # --- ATOMIC UPSERT ---
                 # 1. Ensure server record exists (Using Identity: IP + QueryPort)
                 # Added operator_name and location to INSERT statement
-                insert_sql = db.adapter.adapt_sql("""
-                    INSERT OR IGNORE INTO dim_servers (ip_address, query_port, game_port, name, current_map_id, last_seen, map_start, current_session_uuid, operator_name, location) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """)
-                cur.execute(insert_sql, (current_ip, current_qport, s["game_port"], s["name"], map_id, scan_time, scan_time, str(uuid.uuid4()), operator_name, location_val))
+                # PostgreSQL: INSERT ... ON CONFLICT DO NOTHING
+                cur.execute("""
+                    INSERT INTO dim_servers (ip_address, query_port, game_port, name, current_map_id, last_seen, map_start, current_session_uuid, operator_name, location) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (ip_address, query_port) DO NOTHING
+                """, (current_ip, current_qport, s["game_port"], s["name"], map_id, scan_time, scan_time, str(uuid.uuid4()), operator_name, location_val))
             
                 # 2. Retrieve authoritative ID from DB (or Cache if confident)
                 if cache_key in server_cache:
@@ -664,7 +641,7 @@ def main():
                 else:
                     # Cache miss (New IP or Cold Start). 
                     # 1. Try DB lookup by IP
-                    cur.execute("SELECT id, game_port, current_session_uuid, current_map_id, map_start FROM dim_servers WHERE ip_address=? AND query_port=?", (current_ip, current_qport))
+                    cur.execute("SELECT id, game_port, current_session_uuid, current_map_id, map_start FROM dim_servers WHERE ip_address=%s AND query_port=%s", (current_ip, current_qport))
                     row = cur.fetchone()
                     
                     if row:
@@ -697,7 +674,7 @@ def main():
 
                         candidates = []
                         if not is_generic:
-                            cur.execute("SELECT id, game_port, current_session_uuid, current_map_id, map_start, ip_address FROM dim_servers WHERE name=?", (s["name"],))
+                            cur.execute("SELECT id, game_port, current_session_uuid, current_map_id, map_start, ip_address FROM dim_servers WHERE name=%s", (s["name"],))
                             candidates = cur.fetchall()
                         
                         if len(candidates) >= 1:
@@ -713,7 +690,7 @@ def main():
                             print(f"[!] Dynamic IP: {s['name']} moved from {old_ip} to {current_ip}")
                             try:
                                 # Migrate record to new IP
-                                cur.execute("UPDATE dim_servers SET ip_address=?, query_port=? WHERE id=?", (current_ip, current_qport, sid))
+                                cur.execute("UPDATE dim_servers SET ip_address=%s, query_port=%s WHERE id=%s", (current_ip, current_qport, sid))
                             except Exception as e:
                                 # Collision (Rare): Just make a new ID
                                 print(f"[!] Collision during IP migration: {e}")
@@ -723,14 +700,14 @@ def main():
 
                     if sid is None:
                         # 3. Truly New Server. Create ID.
-                        insert_sql = db.adapter.adapt_sql("""
-                            INSERT OR IGNORE INTO dim_servers (ip_address, query_port, game_port, name, current_map_id, last_seen, map_start, current_session_uuid, operator_name, location) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """)
-                        cur.execute(insert_sql, (current_ip, current_qport, s["game_port"], s["name"], map_id, scan_time, scan_time, str(uuid.uuid4()), operator_name, location_val))
+                        cur.execute("""
+                            INSERT INTO dim_servers (ip_address, query_port, game_port, name, current_map_id, last_seen, map_start, current_session_uuid, operator_name, location) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (ip_address, query_port) DO NOTHING
+                        """, (current_ip, current_qport, s["game_port"], s["name"], map_id, scan_time, scan_time, str(uuid.uuid4()), operator_name, location_val))
                         
                         # Fetch ID again
-                        cur.execute("SELECT id FROM dim_servers WHERE ip_address=? AND query_port=?", (current_ip, current_qport))
+                        cur.execute("SELECT id FROM dim_servers WHERE ip_address=%s AND query_port=%s", (current_ip, current_qport))
                         sid = cur.fetchone()['id']
                         
                         # Default values for new server
@@ -752,7 +729,7 @@ def main():
                     
                     cur.execute("""
                         INSERT INTO fact_server_history (server_id, map_id, session_start, session_end, reason, session_uuid, calculated_duration)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (sid, db_map_id, db_map_start, scan_time, "Map Rotation", db_session_uuid, duration_sec))
                     
                     db_map_start = scan_time
@@ -763,7 +740,7 @@ def main():
                 elif map_id == db_map_id:
                     # 1. Get the aggregate score from the PREVIOUS scan (DB State)
                     # We need to know what the score was before we overwrite it.
-                    cur.execute("SELECT SUM(score) FROM fact_active WHERE server_id=?", (sid,))
+                    cur.execute("SELECT SUM(score) FROM fact_active WHERE server_id=%s", (sid,))
                     row = cur.fetchone()
                     prev_total_score = row[0] if row and row[0] else 0
                     
@@ -779,7 +756,7 @@ def main():
                         
                         cur.execute("""
                             INSERT INTO fact_server_history (server_id, map_id, session_start, session_end, reason, session_uuid, calculated_duration)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """, (sid, db_map_id, db_map_start, scan_time, "Match Restart", db_session_uuid, duration_sec))
                         
                         # CRITICAL: Reset the timer. 
@@ -790,11 +767,11 @@ def main():
                 # --------------------------------------------------
                 
                 # 5. Update Server State
-                # Added operator_name=? and location=? to SET clause
+                # Added operator_name=%s and location=%s to SET clause
                 cur.execute("""
                     UPDATE dim_servers 
-                    SET name=?, current_map_id=?, player_count=?, map_start=?, last_seen=?, game_port=?, current_session_uuid=?, operator_name=?, location=?
-                    WHERE id=?
+                    SET name=%s, current_map_id=%s, player_count=%s, map_start=%s, last_seen=%s, game_port=%s, current_session_uuid=%s, operator_name=%s, location=%s
+                    WHERE id=%s
                 """, (s["name"], map_id, s["header_count"], db_map_start, scan_time, final_game_port, current_session_uuid, operator_name, location_val, sid)) 
                 
                 # 6. Update Sessions
@@ -802,23 +779,22 @@ def main():
                     pid = get_player_id(p["name"])
                     
                     # --- UPDATE: Added calculated_duration math to fact_active ---
-                    # 使用数据库抽象层的 UPSERT 语法
-                    upsert_sql = db.adapter.adapt_sql("""
+                    # PostgreSQL: UPSERT with EXTRACT(EPOCH FROM ...)
+                    cur.execute("""
                         INSERT INTO fact_active (server_id, player_id, map_id, score, duration, calculated_duration, first_seen, last_seen, session_uuid)
-                        VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, 0, %s, %s, %s)
                         ON CONFLICT(server_id, player_id) DO UPDATE SET
                             score=excluded.score,
                             duration=excluded.duration,
-                            calculated_duration=(strftime('%s', excluded.last_seen) - strftime('%s', fact_active.first_seen)),
+                            calculated_duration=EXTRACT(EPOCH FROM (excluded.last_seen - fact_active.first_seen))::INTEGER,
                             map_id=excluded.map_id,
                             last_seen=excluded.last_seen,
                             session_uuid=excluded.session_uuid
-                    """)
-                    cur.execute(upsert_sql, (sid, pid, map_id, p["score"], p["dur"], scan_time, scan_time, current_session_uuid))
+                    """, (sid, pid, map_id, p["score"], p["dur"], scan_time, scan_time, current_session_uuid))
 
             cur.execute("""
                 INSERT INTO fact_global_stats (scan_time, active_servers, active_players)
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
             """, (scan_time, total_active_servers, total_active_players))
             # --- DEAD SERVER CLEANUP ---
             # 1. Define the cutoff (15 minutes ago)
@@ -828,23 +804,21 @@ def main():
             # We only archive them if they aren't already marked as empty/processed 
             # (Assuming player_count > 0 acts as our "active" flag here, 
             # otherwise you log a history entry for every 15m cycle a server stays dead)
-            # --- UPDATE: Calculate duration using SQL math for dead servers ---
-            # 使用数据库抽象层的时间函数
-            duration_sql = db.adapter.adapt_sql("""
+            # --- UPDATE: Calculate duration using PostgreSQL EXTRACT ---
+            cur.execute("""
                 INSERT INTO fact_server_history (server_id, map_id, session_start, session_end, reason, session_uuid, calculated_duration)
                 SELECT id, current_map_id, map_start, last_seen, 'Connection Lost', current_session_uuid,
-                       (strftime('%s', last_seen) - strftime('%s', map_start))
+                       EXTRACT(EPOCH FROM (last_seen - map_start))::INTEGER
                 FROM dim_servers
-                WHERE last_seen < ? AND player_count > 0
-            """)
-            cur.execute(duration_sql, (server_timeout,))
+                WHERE last_seen < %s AND player_count > 0
+            """, (server_timeout,))
 
             # 3. Mark them as empty so they stop showing up as active
             # We also reset map_start to prevent duplicate history entries if it stays dead
             cur.execute("""
                 UPDATE dim_servers
-                SET player_count = 0, map_start = ?
-                WHERE last_seen < ? AND player_count > 0
+                SET player_count = 0, map_start = %s
+                WHERE last_seen < %s AND player_count > 0
             """, (scan_time, server_timeout))
             # ---------------------------    
             # --- ROLLUPS ---

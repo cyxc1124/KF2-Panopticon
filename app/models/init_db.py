@@ -59,8 +59,6 @@ def _ensure_postgresql_database_exists():
         return False
 
 
-
-
 def init_database(force=False):
     """
     初始化数据库表结构（幂等操作）
@@ -77,12 +75,9 @@ def init_database(force=False):
     print("Database Initialization")
     print("=" * 80)
     
-    print(f"\n数据库类型: {db.db_type}")
-    
-    # 对于 PostgreSQL，先确保数据库存在
-    if db.db_type == 'postgresql':
-        if not _ensure_postgresql_database_exists():
-            return False
+    # 确保数据库存在
+    if not _ensure_postgresql_database_exists():
+        return False
     
     # 检查是否已初始化
     if not force:
@@ -97,15 +92,13 @@ def init_database(force=False):
             # 表可能不存在，继续初始化
             pass
     
-    if db.db_type == 'postgresql':
-        return _init_postgresql(db)
-    else:
-        return _init_sqlite(db)
+    # 初始化 PostgreSQL
+    return _init_postgresql(db)
 
 
 def _init_postgresql(db):
     """初始化 PostgreSQL 数据库"""
-    print("\n正在初始化 PostgreSQL 数据库...")
+    print("\nInitializing PostgreSQL database...")
     
     # 读取 SQL 脚本
     sql_file = Path(__file__).parent.parent.parent / 'init_postgresql.sql'
@@ -120,6 +113,11 @@ def _init_postgresql(db):
         
         # 执行 SQL 脚本
         conn = db.connect()
+        
+        # 设置为 AUTOCOMMIT 模式，避免事务中止问题
+        import psycopg2
+        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        
         cur = conn.cursor()
         
         # 分割并执行每个语句
@@ -142,99 +140,40 @@ def _init_postgresql(db):
         
         # 执行所有语句
         success_count = 0
+        failed_count = 0
         for i, statement in enumerate(statements, 1):
             try:
                 cur.execute(statement)
                 success_count += 1
             except Exception as e:
-                # 某些语句可能失败（如显示表列表），但不影响初始化
-                if 'CREATE' in statement or 'INSERT' in statement:
-                    print(f"[WARN] Statement {i} execution failed: {str(e)[:50]}")
-        
-        conn.commit()
+                failed_count += 1
+                error_msg = str(e)
+                # 只对关键语句显示警告
+                if any(keyword in statement.upper() for keyword in ['CREATE TABLE', 'CREATE INDEX', 'INSERT INTO']):
+                    # 如果是 "already exists" 类型的错误，说明是幂等操作，不显示警告
+                    if 'already exists' not in error_msg.lower():
+                        print(f"[WARN] Statement {i} failed: {error_msg[:80]}")
         
         # 标记已初始化
-        cur.execute("""
-            INSERT INTO meta_kv (key, value) 
-            VALUES ('db_initialized', 'true') 
-            ON CONFLICT (key) DO UPDATE SET value = 'true'
-        """)
-        conn.commit()
+        try:
+            cur.execute("""
+                INSERT INTO meta_kv (key, value) 
+                VALUES ('db_initialized', 'true') 
+                ON CONFLICT (key) DO UPDATE SET value = 'true'
+            """)
+        except Exception as e:
+            print(f"[WARN] Could not mark as initialized: {e}")
+        
+        cur.close()
         
         print(f"\n[OK] PostgreSQL initialization completed!")
-        print(f"   成功执行 {success_count}/{len(statements)} 条语句")
+        print(f"   Successful: {success_count}/{len(statements)} statements")
+        if failed_count > 0:
+            print(f"   Failed: {failed_count} statements (may be expected for idempotent operations)")
         return True
         
     except Exception as e:
         print(f"\n[ERROR] PostgreSQL initialization failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def _init_sqlite(db):
-    """初始化 SQLite 数据库"""
-    print("\n正在初始化 SQLite 数据库...")
-    
-    # 读取 SQL 脚本
-    sql_file = Path(__file__).parent.parent.parent / 'init_sqlite.sql'
-    
-    if not sql_file.exists():
-        print(f"[ERROR] Initialization script not found: {sql_file}")
-        return False
-    
-    try:
-        with open(sql_file, 'r', encoding='utf-8') as f:
-            sql_script = f.read()
-        
-        # 执行 SQL 脚本
-        conn = db.connect()
-        cur = conn.cursor()
-        
-        # 分割并执行每个语句
-        statements = []
-        current_statement = []
-        
-        for line in sql_script.split('\n'):
-            # 跳过注释和空行
-            stripped = line.strip()
-            if not stripped or stripped.startswith('--'):
-                continue
-            
-            current_statement.append(line)
-            
-            # 如果行以分号结束，执行该语句
-            if stripped.endswith(';'):
-                statement = '\n'.join(current_statement)
-                statements.append(statement)
-                current_statement = []
-        
-        # 执行所有语句
-        success_count = 0
-        for i, statement in enumerate(statements, 1):
-            try:
-                cur.execute(statement)
-                success_count += 1
-            except Exception as e:
-                # 某些语句可能失败（如 PRAGMA），但不影响初始化
-                if 'CREATE' in statement or 'INSERT' in statement:
-                    print(f"[WARN] Statement {i} execution failed: {str(e)[:50]}")
-        
-        conn.commit()
-        
-        # 标记已初始化
-        cur.execute("""
-            INSERT OR IGNORE INTO meta_kv (key, value) 
-            VALUES ('db_initialized', 'true')
-        """)
-        conn.commit()
-        
-        print(f"\n[OK] SQLite initialization completed!")
-        print(f"   成功执行 {success_count}/{len(statements)} 条语句")
-        return True
-        
-    except Exception as e:
-        print(f"\n[ERROR] SQLite initialization failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -245,73 +184,37 @@ def check_database_status():
     检查数据库状态
     
     Returns:
-        dict: 数据库状态信息
+        dict: 包含数据库状态信息的字典
     """
     db = get_database()
     status = {
-        'type': db.db_type,
+        'type': 'postgresql',
         'initialized': False,
         'tables': [],
         'error': None
     }
     
     try:
-        conn = db.connect()
-        cur = conn.cursor()
-        
-        # 获取表列表
-        if db.db_type == 'postgresql':
+        with db.cursor() as cur:
+            # 检查是否已初始化
+            try:
+                cur.execute("SELECT COUNT(*) as cnt FROM meta_kv WHERE key = 'db_initialized'")
+                result = cur.fetchone()
+                if result and result['cnt'] > 0:
+                    status['initialized'] = True
+            except:
+                pass
+            
+            # 获取表列表
             cur.execute("""
                 SELECT tablename 
                 FROM pg_tables 
                 WHERE schemaname = 'public'
                 ORDER BY tablename
             """)
-        else:
-            cur.execute("""
-                SELECT name 
-                FROM sqlite_master 
-                WHERE type='table' 
-                ORDER BY name
-            """)
-        
-        status['tables'] = [row[0] for row in cur.fetchall()]
-        status['initialized'] = len(status['tables']) > 0
-        
-        # 检查初始化标记
-        if 'meta_kv' in status['tables']:
-            cur.execute("SELECT value FROM meta_kv WHERE key = 'db_initialized'")
-            result = cur.fetchone()
-            if result:
-                status['db_marked_initialized'] = True
-        
+            status['tables'] = [row['tablename'] for row in cur.fetchall()]
+            
     except Exception as e:
         status['error'] = str(e)
     
     return status
-
-
-if __name__ == '__main__':
-    """命令行工具：手动初始化数据库"""
-    import sys
-    
-    force = '--force' in sys.argv
-    
-    if init_database(force=force):
-        print("\n" + "=" * 80)
-        print("[OK] Database initialization successful!")
-        print("=" * 80)
-        
-        # 显示状态
-        status = check_database_status()
-        print(f"\n数据库类型: {status['type']}")
-        print(f"表数量: {len(status['tables'])}")
-        print(f"表列表: {', '.join(status['tables'][:5])}...")
-        
-        sys.exit(0)
-    else:
-        print("\n" + "=" * 80)
-        print("[ERROR] Database initialization failed")
-        print("=" * 80)
-        sys.exit(1)
-
