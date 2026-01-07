@@ -571,9 +571,10 @@ def main():
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
                     WHERE table_name = 'ip_ranges'
-                )
+                ) as table_exists
             """)
-            has_geoip = cur.fetchone()[0]
+            row = cur.fetchone()
+            has_geoip = row['table_exists'] if row else False
         db.commit()
     except Exception:
         pass
@@ -771,9 +772,9 @@ def main():
                 elif map_id == db_map_id:
                     # 1. Get the aggregate score from the PREVIOUS scan (DB State)
                     # We need to know what the score was before we overwrite it.
-                    cur.execute("SELECT SUM(score) FROM fact_active WHERE server_id=%s", (sid,))
+                    cur.execute("SELECT SUM(score) as total FROM fact_active WHERE server_id=%s", (sid,))
                     row = cur.fetchone()
-                    prev_total_score = row[0] if row and row[0] else 0
+                    prev_total_score = row['total'] if row and row['total'] else 0
                     
                     # 2. Calculate the aggregate score from the CURRENT scan (Live State)
                     curr_total_score = sum(p['score'] for p in s['player_list'])
