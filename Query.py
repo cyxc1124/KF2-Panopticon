@@ -309,8 +309,21 @@ def query_server(server_addr):
         except: pass
         
     return results if results["name"] else None
+def _execute(cur, sql, params=None):
+    """
+    执行 SQL 语句，自动转换占位符
+    兼容 SQLite (?) 和 PostgreSQL (%s)
+    """
+    db = get_database()
+    sql, params = db.adapter.convert_placeholders(sql, params)
+    if params:
+        cur.execute(sql, params)
+    else:
+        cur.execute(sql)
+
 def _kv_get(cur, key):
-    row = cur.execute("SELECT value FROM meta_kv WHERE key = ?", (key,)).fetchone()
+    _execute(cur, "SELECT value FROM meta_kv WHERE key = ?", (key,))
+    row = cur.fetchone()
     if row:
         return row.get('value') or row[0] if isinstance(row, dict) else row[0]
     return None
@@ -322,7 +335,8 @@ def _kv_set(cur, key, value):
         INSERT INTO meta_kv (key, value) VALUES (?, ?)
         ON CONFLICT(key) DO UPDATE SET value=excluded.value
     """)
-    cur.execute(upsert_sql, (key, value))
+    sql, params = db.adapter.convert_placeholders(upsert_sql, (key, value))
+    cur.execute(sql, params)
 
 def backfill_rollups(cur):
     """
@@ -554,13 +568,17 @@ def main():
     db = get_database()
     try:
         with db.cursor() as cur:
-            map_cache = {row['name']: row['id'] for row in cur.execute("SELECT id, name FROM dim_maps").fetchall()}
-            player_cache = {row['name']: row['id'] for row in cur.execute("SELECT id, name FROM dim_players").fetchall()}
+            cur.execute("SELECT id, name FROM dim_maps")
+            map_cache = {row['name']: row['id'] for row in cur.fetchall()}
+            
+            cur.execute("SELECT id, name FROM dim_players")
+            player_cache = {row['name']: row['id'] for row in cur.fetchall()}
         
             server_cache = {}
             # New Cache Key Format: "IP:QueryPort"
             # FIX: Loop is correctly indented
-            for row in cur.execute("SELECT id, ip_address, query_port, game_port, current_map_id, map_start, player_count, last_seen, name, current_session_uuid, operator_name FROM dim_servers").fetchall():
+            cur.execute("SELECT id, ip_address, query_port, game_port, current_map_id, map_start, player_count, last_seen, name, current_session_uuid, operator_name FROM dim_servers")
+            for row in cur.fetchall():
                 cache_key = f"{row['ip_address']}:{row['query_port']}" # IP:QueryPort
                 server_cache[cache_key] = {
                     'id': row['id'], 
@@ -579,7 +597,11 @@ def main():
                 # 使用数据库抽象层的 INSERT OR IGNORE
                 insert_sql = db.adapter.adapt_sql("INSERT OR IGNORE INTO dim_maps (name) VALUES (?)")
                 cur.execute(insert_sql, (m_name,))
-                mid = cur.lastrowid or cur.execute("SELECT id FROM dim_maps WHERE name = ?", (m_name,)).fetchone()['id']
+                if cur.lastrowid:
+                    mid = cur.lastrowid
+                else:
+                    cur.execute("SELECT id FROM dim_maps WHERE name = ?", (m_name,))
+                    mid = cur.fetchone()['id']
                 map_cache[m_name] = mid
                 return mid
 
@@ -588,7 +610,11 @@ def main():
                 # 使用数据库抽象层的 INSERT OR IGNORE
                 insert_sql = db.adapter.adapt_sql("INSERT OR IGNORE INTO dim_players (name) VALUES (?)")
                 cur.execute(insert_sql, (p_name,))
-                pid = cur.lastrowid or cur.execute("SELECT id FROM dim_players WHERE name = ?", (p_name,)).fetchone()['id']
+                if cur.lastrowid:
+                    pid = cur.lastrowid
+                else:
+                    cur.execute("SELECT id FROM dim_players WHERE name = ?", (p_name,))
+                    pid = cur.fetchone()['id']
                 player_cache[p_name] = pid
                 return pid
 
@@ -638,7 +664,8 @@ def main():
                 else:
                     # Cache miss (New IP or Cold Start). 
                     # 1. Try DB lookup by IP
-                    row = cur.execute("SELECT id, game_port, current_session_uuid, current_map_id, map_start FROM dim_servers WHERE ip_address=? AND query_port=?", (current_ip, current_qport)).fetchone()
+                    cur.execute("SELECT id, game_port, current_session_uuid, current_map_id, map_start FROM dim_servers WHERE ip_address=? AND query_port=?", (current_ip, current_qport))
+                    row = cur.fetchone()
                     
                     if row:
                         sid = row['id']
@@ -670,7 +697,8 @@ def main():
 
                         candidates = []
                         if not is_generic:
-                            candidates = cur.execute("SELECT id, game_port, current_session_uuid, current_map_id, map_start, ip_address FROM dim_servers WHERE name=?", (s["name"],)).fetchall()
+                            cur.execute("SELECT id, game_port, current_session_uuid, current_map_id, map_start, ip_address FROM dim_servers WHERE name=?", (s["name"],))
+                            candidates = cur.fetchall()
                         
                         if len(candidates) >= 1:
                             # Found exactly one match. Assume it moved.
@@ -702,7 +730,8 @@ def main():
                         cur.execute(insert_sql, (current_ip, current_qport, s["game_port"], s["name"], map_id, scan_time, scan_time, str(uuid.uuid4()), operator_name, location_val))
                         
                         # Fetch ID again
-                        sid = cur.execute("SELECT id FROM dim_servers WHERE ip_address=? AND query_port=?", (current_ip, current_qport)).fetchone()['id']
+                        cur.execute("SELECT id FROM dim_servers WHERE ip_address=? AND query_port=?", (current_ip, current_qport))
+                        sid = cur.fetchone()['id']
                         
                         # Default values for new server
                         db_game_port = s["game_port"]
@@ -734,7 +763,8 @@ def main():
                 elif map_id == db_map_id:
                     # 1. Get the aggregate score from the PREVIOUS scan (DB State)
                     # We need to know what the score was before we overwrite it.
-                    row = cur.execute("SELECT SUM(score) FROM fact_active WHERE server_id=?", (sid,)).fetchone()
+                    cur.execute("SELECT SUM(score) FROM fact_active WHERE server_id=?", (sid,))
+                    row = cur.fetchone()
                     prev_total_score = row[0] if row and row[0] else 0
                     
                     # 2. Calculate the aggregate score from the CURRENT scan (Live State)
