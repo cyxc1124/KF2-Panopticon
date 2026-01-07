@@ -24,27 +24,26 @@ if __name__ == '__main__':
     # 从配置获取端口和调试模式
     port = config.WEB_PORT
     debug = config.DEBUG_MODE
-    db_type = config.DB_TYPE
     
     print(f"""
 ╔═══════════════════════════════════════════════════════════╗
 ║   KF2-Panopticon Web Application                         ║
 ╚═══════════════════════════════════════════════════════════╝
 
-启动信息:
-  - 端口: {port}
-  - 调试模式: {debug}
-  - 数据库类型: {db_type}
-  - 访问地址: http://localhost:{port}
-  - 健康检查: http://localhost:{port}/health
-  - 就绪检查: http://localhost:{port}/ready
+Startup Info:
+  - Port: {port}
+  - Debug Mode: {debug}
+  - Database: PostgreSQL
+  - Access URL: http://localhost:{port}
+  - Health Check: http://localhost:{port}/health
+  - Readiness Check: http://localhost:{port}/ready
   
 """)
     
     # 自动初始化数据库（幂等操作）
-    print("检查数据库状态...\n")
+    print("Checking database status...\n")
     
-    # 自动初始化（PostgreSQL 和 SQLite 都支持）
+    # 自动初始化 PostgreSQL
     init_database()
     
     print("-" * 63)
