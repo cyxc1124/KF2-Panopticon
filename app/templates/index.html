@@ -52,8 +52,8 @@
                     
 
 					<td class="small text-muted">
-						<span class="local-time" data-time="{{ p.last_seen }}">
-							{{ p.last_seen[:19] }}
+						<span class="local-time" data-time="{{ p.last_seen|datetime_str }}">
+							{{ p.last_seen|datetime_str }}
 						</span>
 					</td>
                 </tr>

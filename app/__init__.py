@@ -31,6 +31,16 @@ def create_app(config_name=None):
     from app.utils.helpers import format_duration, parse_location
     app.jinja_env.filters['human_time'] = format_duration
     
+    # 添加 datetime 格式化过滤器
+    from datetime import datetime
+    def format_datetime(value):
+        """格式化 datetime 对象为字符串"""
+        if isinstance(value, datetime):
+            return value.strftime('%Y-%m-%d %H:%M:%S')
+        return str(value) if value else ''
+    
+    app.jinja_env.filters['datetime_str'] = format_datetime
+    
     # 注册蓝图
     from app.routes import main_bp, servers_bp, players_bp, factions_bp, stats_bp
     from app.routes.health import health_bp

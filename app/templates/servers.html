@@ -64,7 +64,7 @@
                     </td>
                     
                    <td class="small text-muted">
-                       <span class="local-time" data-time="{{ s.last_seen }}" style="visibility: hidden;">{{ s.last_seen[:19] }}</span>
+                       <span class="local-time" data-time="{{ s.last_seen|datetime_str }}" style="visibility: hidden;">{{ s.last_seen|datetime_str }}</span>
                    </td>
 
                     <td class="text-center">

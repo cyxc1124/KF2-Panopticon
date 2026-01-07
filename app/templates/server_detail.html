@@ -49,8 +49,8 @@
                     </div>
                     <div class="col-md-3">
                         <small class="text-muted d-block">Last Seen</small>
-                        <span class="local-time" data-time="{{ server.last_seen }}" style="visibility: hidden;">
-                            {{ server.last_seen[:19] }}
+                        <span class="local-time" data-time="{{ server.last_seen|datetime_str }}" style="visibility: hidden;">
+                            {{ server.last_seen|datetime_str }}
                         </span>
                     </div>
                     <div class="col-md-3 text-end">
@@ -89,8 +89,8 @@
                     <td class="text-warning font-monospace">{{ p.score }}</td>
                     <td>{{ p.duration|human_time }}</td>
                     <td class="text-muted small">
-                        <span class="local-time" data-time="{{ p.first_seen }}" style="visibility: hidden;">
-                            {{ p.first_seen[:19] }}
+                        <span class="local-time" data-time="{{ p.first_seen|datetime_str }}" style="visibility: hidden;">
+                            {{ p.first_seen|datetime_str }}
                         </span>
                     </td>
                 </tr>

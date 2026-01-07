@@ -75,8 +75,8 @@
                                     <div class="small text-muted font-monospace">{{ row.address }}</div>
                                 </td>
                                 <td>
-                                    <span class="local-time" data-time="{{ row.session_start }}" style="visibility: hidden;">
-                                        {{ row.session_start[:19] }}
+                                    <span class="local-time" data-time="{{ row.session_start|datetime_str }}" style="visibility: hidden;">
+                                        {{ row.session_start|datetime_str }}
                                     </span>
                                 </td>
                                 <td>{{ row.total_time|human_time }}</td>
