@@ -33,10 +33,6 @@ WEB_PORT = 9001
 # 调试模式 (生产环境请设置为 False)
 DEBUG_MODE = True
 
-# 日志文件路径
-LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
-LOG_FILE = os.path.join(LOG_DIR, "performance_debug.jsonl")
-
 # ==================== 查询配置 ====================
 # 本地回环 IP (如果在游戏服务器上运行收集器)
 LOCAL_LOOPBACK_IP = "127.0.0.1"

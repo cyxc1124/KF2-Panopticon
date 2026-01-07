@@ -47,10 +47,6 @@ WEB_PORT = int(os.environ.get('WEB_PORT', '9001'))
 # 调试模式 (生产环境请通过环境变量设置为 false)
 DEBUG_MODE = os.environ.get('DEBUG_MODE', 'true').lower() in ('true', '1', 'yes')
 
-# 日志配置
-LOG_DIR = os.environ.get('LOG_DIR', str(BASE_DIR / 'logs'))
-LOG_FILE = os.path.join(LOG_DIR, 'performance_debug.jsonl')
-
 # ==================== 查询配置 ====================
 # 本地回环 IP (如果在服务器上运行)
 LOCAL_LOOPBACK_IP = os.environ.get('LOCAL_LOOPBACK_IP', '127.0.0.1')
